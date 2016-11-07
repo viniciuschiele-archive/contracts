@@ -2,10 +2,11 @@ from distutils.core import setup
 from Cython.Build import cythonize
 
 setup(
-    ext_modules=cythonize(('contracts/exceptions.py',
-                           'contracts/fields.py',
-                           'contracts/validators.py',
-                           'contracts/utils/__init__.py',
-                           'contracts/utils/formatting.py'))
+    ext_modules=cythonize(('contracts/__init__.pyx',
+                           'contracts/exceptions.pyx',
+                           'contracts/fields.pyx',
+                           'contracts/validators.pyx',
+                           'contracts/utils/__init__.pyx',
+                           'contracts/utils/formatting.pyx'))
 )
 

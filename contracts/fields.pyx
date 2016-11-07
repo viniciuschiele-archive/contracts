@@ -1,13 +1,11 @@
 """
 Provides a set of classes to serialize Python objects.
 """
-
 from cpython cimport bool
 from . import utils
 from .exceptions import ValidationError
 from .utils import formatting, missing
 from .validators import LengthValidator, RangeValidator
-
 
 MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key `{key}` does ' \
                         'not exist in the `error_messages` dictionary.'
@@ -63,7 +61,7 @@ cdef class Field(object):
         self.field_name = None
         self.parent = None
 
-    def bind(self, field_name, parent):
+    cpdef bind(self, field_name, parent):
         self.field_name = field_name
         self.parent = parent
 
@@ -73,7 +71,7 @@ cdef class Field(object):
         if not self.load_from:
             self.load_from = field_name
 
-    def get_default(self):
+    cpdef get_default(self):
         if self.default is missing:
             return missing
 
@@ -91,8 +89,13 @@ cdef class Field(object):
 
         return self._dump(value)
 
-    def load(self, value):
-        if value is missing:
+    cpdef load(self, value):
+        if value is None:
+            if self.allow_none:
+                return None
+            self._fail('null')
+
+        if type(value) is missing:
             if getattr(self.root, 'partial', False):
                 return missing
 
@@ -100,11 +103,6 @@ cdef class Field(object):
                 self._fail('required')
 
             return self.get_default()
-
-        if value is None:
-            if self.allow_none:
-                return None
-            self._fail('null')
 
         validated_value = self._load(value)
         self._validate(validated_value)
@@ -130,7 +128,7 @@ cdef class Field(object):
     cpdef _dump(self, object value):
         raise NotImplementedError()
 
-    def _load(self, value):
+    cpdef _load(self, value):
         raise NotImplementedError()
 
     def _fail(self, key, **kwargs):
@@ -145,7 +143,7 @@ cdef class Field(object):
             message = formatting.format_error_message(MISSING_ERROR_MESSAGE, class_name=class_name, key=key)
             raise AssertionError(message)
 
-    def _validate(self, value):
+    cpdef _validate(self, value):
         errors = []
         for validator in self.validators:
             try:
@@ -182,7 +180,7 @@ cdef class IntegerField(Field):
         if self.min_value is not None or self.max_value is not None:
             self.validators.append(RangeValidator(min_value, max_value, self.error_messages))
 
-    def _load(self, value):
+    cpdef _load(self, value):
         try:
             return int(value)
         except (ValueError, TypeError):
@@ -199,12 +197,12 @@ cdef class StringField(Field):
         'min_length': 'Shorter than minimum length {min_length}.'
     }
 
-    cdef object allow_blank
-    cdef object trim_whitespace
+    cdef bool allow_blank
+    cdef bool trim_whitespace
     cdef object min_length
     cdef object max_length
 
-    def __init__(self, allow_blank=False, trim_whitespace=True, min_length=None, max_length=None, **kwargs):
+    def __init__(self, allow_blank=False, trim_whitespace=False, min_length=None, max_length=None, **kwargs):
         super().__init__(**kwargs)
         self.allow_blank = allow_blank
         self.trim_whitespace = trim_whitespace
@@ -215,13 +213,14 @@ cdef class StringField(Field):
             self.validators.append(
                 LengthValidator(self.min_length, self.max_length, error_messages=self.error_messages))
 
-    def _load(self, value):
-        value = str(value)
+    cpdef _load(self, value):
+        if not isinstance(value, str):
+            value = str(value)
 
         if self.trim_whitespace:
             value = value.strip()
 
-        if value == '' and not self.allow_blank:
+        if not self.allow_blank and value == '':
             if self.allow_none:
                 return None
             self._fail('blank')
@@ -239,11 +238,19 @@ cdef class Contract(Field):
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
 
+    cdef public bool many
+    cdef public object only
+    cdef public bool partial
+    cdef public object fields
+    cdef public object _declared_fields
+    cdef public object _load_fields
+    cdef public object _dump_fields
+
     def __init__(self, many=False, only=None, partial=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        if not getattr(type(self), '_declared_fields', None):
-            type(self)._declared_fields = self._get_declared_fields()
+        if not self._declared_fields:
+            self._declared_fields = self._get_declared_fields()
 
         only = only or ()
         if not isinstance(only, (list, tuple)):
@@ -320,7 +327,7 @@ cdef class Contract(Field):
 
         return dict(fields)
 
-    def _get_value(self, data, field_name):
+    cdef inline _get_value(self, data, field_name):
         if isinstance(data, dict):
             return data.get(field_name, missing)
 
@@ -332,7 +339,7 @@ cdef class Contract(Field):
         else:
             return self._dump_single(data)
 
-    cpdef _dump_many(self, data):
+    cdef inline _dump_many(self, data):
         items = []
 
         for item in data:
@@ -340,7 +347,7 @@ cdef class Contract(Field):
 
         return items
 
-    cpdef _dump_single(self, data):
+    cdef inline _dump_single(self, data):
         result = dict()
 
         data = self.pre_dump(data)
@@ -355,13 +362,13 @@ cdef class Contract(Field):
 
         return self.post_dump(result, data)
 
-    def _load(self, data):
+    cpdef _load(self, data):
         if self.many:
             return self._load_many(data)
         else:
             return self._load_single(data)
 
-    def _load_many(self, data):
+    cdef inline _load_many(self, data):
         data = self.pre_load_many(data)
 
         items = []
@@ -373,7 +380,7 @@ cdef class Contract(Field):
 
         return items
 
-    def _load_single(self, data):
+    cdef inline _load_single(self, data):
         if not isinstance(data, dict):
             self._fail('invalid', datatype=type(data).__name__)
 
@@ -398,11 +405,11 @@ cdef class Contract(Field):
 
         return self.post_load(result, data)
 
-    def _validate(self, value):
+    cpdef _validate(self, value):
         errors = []
 
         try:
-            super()._validate(value)
+            super(Contract, self)._validate(value)
         except ValidationError as err:
             errors.append(err)
 

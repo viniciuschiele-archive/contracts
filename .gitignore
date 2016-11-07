@@ -7,6 +7,7 @@ __pycache__/
 
 # C extensions
 *.so
+*.c
 
 # Distribution / packaging
 .Python
@@ -90,3 +91,9 @@ ENV/
 # Rope project settings
 .ropeproject
 
+.idea/
+contracts/exceptions.c
+contracts/fields.c
+contracts/utils/__init__.c
+contracts/utils/formatting.c
+contracts/validators.c

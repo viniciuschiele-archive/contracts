@@ -159,7 +159,7 @@ class IntegerField(Field):
     }
 
     def __init__(self, min_value=None, max_value=None, **kwargs):
-        super().__init__(**kwargs)
+        super(IntegerField, self).__init__(**kwargs)
         self.min_value = min_value
         self.max_value = max_value
 
@@ -184,7 +184,7 @@ class StringField(Field):
     }
 
     def __init__(self, allow_blank=False, trim_whitespace=True, min_length=None, max_length=None, **kwargs):
-        super().__init__(**kwargs)
+        super(StringField, self).__init__(**kwargs)
         self.allow_blank = allow_blank
         self.trim_whitespace = trim_whitespace
         self.min_length = min_length
@@ -236,13 +236,15 @@ class ContractMeta(type):
         return dict(fields)
 
 
-class Contract(Field, metaclass=ContractMeta):
+class Contract(Field):
+    __metaclass__ = ContractMeta
+
     default_error_messages = {
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
 
     def __init__(self, many=False, only=None, partial=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(Contract, self).__init__(*args, **kwargs)
 
         only = only or ()
         if not isinstance(only, (list, tuple)):
@@ -383,7 +385,7 @@ class Contract(Field, metaclass=ContractMeta):
         errors = []
 
         try:
-            super()._validate(value)
+            super(Contract, self)._validate(value)
         except ValidationError as err:
             errors.append(err)
 

@@ -14,8 +14,7 @@ MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key
                         'not exist in the `error_messages` dictionary.'
 
 
-class Validator(object):
-    __metaclass__ = ABCMeta
+class Validator(metaclass=ABCMeta):
     """
     A base class from which all validator classes should inherit.
     :param dict error_messages: The error messages for various kinds of errors.
@@ -60,7 +59,7 @@ class ChoiceValidator(Validator):
     }
 
     def __init__(self, choices, error_messages=None):
-        super(ChoiceValidator, self).__init__(error_messages)
+        super().__init__(error_messages)
 
         choices = choices or ()
         assert isinstance(choices, (list, tuple)), '`choices` has to be a list or tuple'
@@ -140,7 +139,7 @@ class LengthValidator(Validator):
             raise ValueError('The `equal_length` parameter was provided, maximum or '
                              'minimum parameter must not be provided.')
 
-        super(LengthValidator, self).__init__(error_messages)
+        super().__init__(error_messages)
 
         self.min_length = min_length
         self.max_length = max_length
@@ -176,7 +175,7 @@ class RangeValidator(Validator):
     }
 
     def __init__(self, min_value=None, max_value=None, error_messages=None):
-        super(RangeValidator, self).__init__(error_messages)
+        super().__init__(error_messages)
 
         self.min_value = min_value
         self.max_value = max_value
@@ -201,7 +200,7 @@ class RegexValidator(Validator):
     }
 
     def __init__(self, regex, error_messages=None):
-        super(RegexValidator, self).__init__(error_messages)
+        super().__init__(error_messages)
         self.regex = regex
 
     def __call__(self, value):

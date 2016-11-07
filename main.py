@@ -4,7 +4,7 @@ import string
 from contracts.utils import missing
 from contracts.fields import Contract, IntegerField, StringField
 from datetime import datetime
-from marshmallow import fields, Schema, post_load
+from marshmallow import fields, Schema, post_load, post_dump
 
 
 def generate_random_string(size):
@@ -27,9 +27,12 @@ class MyContract(Contract):
     property13 = StringField()
     property14 = StringField()
     property15 = IntegerField()
-
+    #
     # def post_load(self, data, original_data):
     #     return MyData(**data)
+    #
+    # def post_dump(self, data, original_data):
+    #     return data
 
 
 class MySchema(Schema):
@@ -49,9 +52,13 @@ class MySchema(Schema):
     property14 = fields.String()
     property15 = fields.Integer()
 
-    @post_load
-    def post_load(self, data):
-        return MyData(**data)
+    # @post_load
+    # def post_load(self, data):
+    #     return MyData(**data)
+    #
+    # @post_dump
+    # def post_dump(self, data):
+    #     return data
 
 
 class MyData:
@@ -77,7 +84,7 @@ class MyData:
 
 contract = MyContract()
 schema = MySchema()
-# data = MyData()
+
 data = dict(
     property1=None,
     property2=generate_random_string(20),
@@ -96,17 +103,17 @@ data = dict(
     property15=123456789,
 )
 
-# start = datetime.now()
-# for _ in range(0, 1000):
-#     contract.load(data)
-# stop = datetime.now()
-# print(stop-start)
-#
-# start = datetime.now()
-# for _ in range(0, 1000):
-#     schema.load(data)
-# stop = datetime.now()
-# print(stop-start)
+start = datetime.now()
+for _ in range(0, 1000):
+    contract.load(data)
+stop = datetime.now()
+print(stop-start)
+
+start = datetime.now()
+for _ in range(0, 1000):
+    schema.load(data)
+stop = datetime.now()
+print(stop-start)
 
 start = datetime.now()
 for _ in range(0, 1000):
