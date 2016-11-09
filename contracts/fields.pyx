@@ -1,8 +1,7 @@
 """
 Provides a set of classes to serialize Python objects.
 """
-from cpython cimport bool
-from . import utils
+
 from .exceptions import ValidationError
 from .utils import formatting, missing
 from .validators import LengthValidator, RangeValidator
@@ -18,14 +17,14 @@ cdef class Field(object):
         'validator_failed': 'Invalid value.'
     }
 
-    cdef public bool dump_only
-    cdef public bool load_only
-    cdef object default
-    cdef public bool allow_none
+    cdef public object dump_only
+    cdef public object load_only
+    cdef public object default_
+    cdef public object allow_none
     cdef public object dump_to
     cdef public object load_from
     cdef public object validators
-    cdef public bool required
+    cdef public object required
     cdef public object error_messages
     cdef public object field_name
     cdef public object parent
@@ -34,7 +33,7 @@ cdef class Field(object):
                  dump_to=None, load_from=None, error_messages=None, validators=None):
         self.dump_only = dump_only
         self.load_only = load_only
-        self.default = default
+        self.default_ = default
         self.allow_none = allow_none
         self.dump_to = dump_to
         self.load_from = load_from
@@ -72,13 +71,13 @@ cdef class Field(object):
             self.load_from = field_name
 
     cpdef get_default(self):
-        if self.default is missing:
+        if self.default_ is missing:
             return missing
 
-        if callable(self.default):
-            return self.default()
+        if callable(self.default_):
+            return self.default_()
 
-        return self.default
+        return self.default_
 
     cpdef dump(self, value):
         if value is missing:
@@ -125,7 +124,7 @@ cdef class Field(object):
 
         return root
 
-    cpdef _dump(self, object value):
+    cpdef _dump(self, value):
         raise NotImplementedError()
 
     cpdef _load(self, value):
@@ -169,8 +168,8 @@ cdef class IntegerField(Field):
         'min_value': 'Must be at least {min_value}.'
     }
 
-    cdef object min_value
-    cdef object max_value
+    cdef public object min_value
+    cdef public object max_value
 
     def __init__(self, min_value=None, max_value=None, **kwargs):
         super().__init__(**kwargs)
@@ -181,12 +180,18 @@ cdef class IntegerField(Field):
             self.validators.append(RangeValidator(min_value, max_value, self.error_messages))
 
     cpdef _load(self, value):
+        if isinstance(value, int):
+            return value
+
         try:
             return int(value)
         except (ValueError, TypeError):
             self._fail('invalid')
 
     cpdef _dump(self, value):
+        if isinstance(value, int):
+            return value
+
         return int(value)
 
 
@@ -197,10 +202,10 @@ cdef class StringField(Field):
         'min_length': 'Shorter than minimum length {min_length}.'
     }
 
-    cdef bool allow_blank
-    cdef bool trim_whitespace
-    cdef object min_length
-    cdef object max_length
+    cdef public object allow_blank
+    cdef public object trim_whitespace
+    cdef public object min_length
+    cdef public object max_length
 
     def __init__(self, allow_blank=False, trim_whitespace=False, min_length=None, max_length=None, **kwargs):
         super().__init__(**kwargs)
@@ -227,7 +232,7 @@ cdef class StringField(Field):
 
         return value
 
-    cpdef _dump(self, object value):
+    cpdef _dump(self, value):
         if isinstance(value, str):
             return value
         return str(value)
@@ -238,9 +243,9 @@ cdef class Contract(Field):
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
 
-    cdef public bool many
+    cdef public object many
     cdef public object only
-    cdef public bool partial
+    cdef public object partial
     cdef public object fields
     cdef public object _declared_fields
     cdef public object _load_fields
@@ -305,9 +310,6 @@ cdef class Contract(Field):
 
     cpdef post_load_many(self, data, original_data):
         return data
-
-    cpdef post_validate(self, data):
-        pass
 
     cpdef _get_declared_fields(self):
         fields = []
@@ -404,27 +406,3 @@ cdef class Contract(Field):
             raise ValidationError(errors)
 
         return self.post_load(result, data)
-
-    cpdef _validate(self, value):
-        errors = []
-
-        try:
-            super(Contract, self)._validate(value)
-        except ValidationError as err:
-            errors.append(err)
-
-        try:
-            self.post_validate(value)
-        except ValidationError as err:
-            errors.append(err)
-
-        d = {}
-
-        for error in errors:
-            if isinstance(error.message, dict):
-                d.update(error.message)
-            else:
-                d['_contract'] = error
-
-        if d:
-            raise ValidationError(d)
