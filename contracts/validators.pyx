@@ -2,19 +2,16 @@
 Provides various validators.
 """
 
-import re
 import uuid
 
-from abc import ABCMeta
 from .exceptions import ValidationError
-from .utils.formatting import format_error_message
 
 
 MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key `{key}` does ' \
                         'not exist in the `error_messages` dictionary.'
 
 
-class Validator(metaclass=ABCMeta):
+cdef class Validator(object):
     """
     A base class from which all validator classes should inherit.
     :param dict error_messages: The error messages for various kinds of errors.
@@ -32,22 +29,21 @@ class Validator(metaclass=ABCMeta):
     def _fail(self, key, **kwargs):
         """
         Raises a `ValidationError`.
-        :param key: The key message to be fetched.
-        :param kwargs: The kwargs used to replace the messages token.
+        :param str key: The key message to be fetched.
+        :param dict kwargs: The kwargs used to replace the messages token.
         """
         try:
             message = self.error_messages[key]
-            message = format_error_message(message, **kwargs)
-            if isinstance(message, dict):
-                raise ValidationError(**message)
+            if kwargs:
+                message = message.format(**kwargs)
             raise ValidationError(message)
         except KeyError:
             class_name = self.__class__.__name__
-            message = format_error_message(MISSING_ERROR_MESSAGE, class_name=class_name, key=key)
+            message = MISSING_ERROR_MESSAGE.format(class_name=class_name, key=key)
             raise AssertionError(message)
 
 
-class ChoiceValidator(Validator):
+cdef class Choice(Validator):
     """
     Validator which succeeds if the `value` is a member of the `choices`.
     :param iterable choices: An array of valid values.
@@ -71,55 +67,7 @@ class ChoiceValidator(Validator):
             self._fail('invalid', input=value)
 
 
-class EmailValidator(Validator):
-    """
-    Validator which validates an email address.
-    :param dict error_messages: The error messages for various kinds of errors.
-    """
-
-    USER_REGEX = re.compile(
-        r"(^[-!#$%&'*+/=?^`{}|~\w]+(\.[-!#$%&'*+/=?^`{}|~\w]+)*$"  # dot-atom
-        # quoted-string
-        r'|^"([\001-\010\013\014\016-\037!#-\[\]-\177]'
-        r'|\\[\001-\011\013\014\016-\177])*"$)', re.IGNORECASE | re.UNICODE)
-
-    DOMAIN_REGEX = re.compile(
-        # domain
-        r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+'
-        r'(?:[A-Z]{2,6}|[A-Z0-9-]{2,})$'
-        # literal form, ipv4 address (SMTP 4.1.3)
-        r'|^\[(25[0-5]|2[0-4]\d|[0-1]?\d?\d)'
-        r'(\.(25[0-5]|2[0-4]\d|[0-1]?\d?\d)){3}\]$', re.IGNORECASE | re.UNICODE)
-
-    DOMAIN_WHITELIST = ('localhost',)
-
-    default_error_messages = {
-        'invalid': 'Not a valid email address.'
-    }
-
-    def __call__(self, value):
-        if not value or '@' not in value:
-            self._fail('invalid')
-
-        user_part, domain_part = value.rsplit('@', 1)
-
-        if not self.USER_REGEX.match(user_part):
-            self._fail('invalid')
-
-        if domain_part in self.DOMAIN_WHITELIST:
-            return
-
-        if self.DOMAIN_REGEX.match(domain_part):
-            return
-
-        domain_part = domain_part.encode('idna').decode('ascii')
-        if self.DOMAIN_REGEX.match(domain_part):
-            return
-
-        self._fail('invalid')
-
-
-class LengthValidator(Validator):
+cdef class Length(Validator):
     """
     Validator which succeeds if the value passed to it has a length between a minimum and maximum.
     :param int min_length: The minimum length. If not provided, minimum length will not be checked.
@@ -160,7 +108,7 @@ class LengthValidator(Validator):
             self._fail('max_length', max_length=self.max_length)
 
 
-class RangeValidator(Validator):
+cdef class Range(Validator):
     """
     Validator which succeeds if the value it is passed is greater
     or equal to `min_value` and less than or equal to `max_value`.
@@ -188,7 +136,7 @@ class RangeValidator(Validator):
             self._fail('max_value', max_value=self.max_value)
 
 
-class RegexValidator(Validator):
+cdef class Regex(Validator):
     """
     Validator which succeeds if the `value` matches with the regex.
     :param regex: The regular expression string to use. Can also be a compiled regular expression pattern.
@@ -209,7 +157,7 @@ class RegexValidator(Validator):
         return value
 
 
-class UUIDValidator(Validator):
+cdef class UUID(Validator):
     """
     Validator which succeeds if the value is an UUID.
     :param dict error_messages: The error messages for various kinds of errors.

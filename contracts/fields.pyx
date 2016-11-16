@@ -2,9 +2,13 @@
 Provides a set of classes to serialize Python objects.
 """
 
+import ciso8601
+import datetime
+import uuid
+
+from . cimport validators
 from .exceptions import ValidationError
-from .utils import formatting, missing
-from .validators import LengthValidator, RangeValidator
+from .utils import missing
 
 MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key `{key}` does ' \
                         'not exist in the `error_messages` dictionary.'
@@ -16,18 +20,6 @@ cdef class Field(object):
         'null': 'This field may not be null.',
         'validator_failed': 'Invalid value.'
     }
-
-    cdef public object dump_only
-    cdef public object load_only
-    cdef public object default_
-    cdef public object allow_none
-    cdef public object dump_to
-    cdef public object load_from
-    cdef public object validators
-    cdef public object required
-    cdef public object error_messages
-    cdef public object field_name
-    cdef public object parent
 
     def __init__(self, dump_only=False, load_only=False, required=None, default=missing, allow_none=None,
                  dump_to=None, load_from=None, error_messages=None, validators=None):
@@ -57,31 +49,22 @@ cdef class Field(object):
         messages.update(error_messages or {})
         self.error_messages = messages
 
-        self.field_name = None
+        self.name = None
         self.parent = None
 
-    cpdef bind(self, field_name, parent):
-        self.field_name = field_name
+    cpdef bind(self, name, parent):
+        self.name = name
         self.parent = parent
 
         if not self.dump_to:
-            self.dump_to = field_name
+            self.dump_to = name
 
         if not self.load_from:
-            self.load_from = field_name
-
-    cpdef get_default(self):
-        if self.default_ is missing:
-            return missing
-
-        if callable(self.default_):
-            return self.default_()
-
-        return self.default_
+            self.load_from = name
 
     cpdef dump(self, value):
         if value is missing:
-            return self.get_default()
+            return self._get_default()
 
         if value is None:
             return None
@@ -94,35 +77,24 @@ cdef class Field(object):
                 return None
             self._fail('null')
 
-        if type(value) is missing:
-            if getattr(self.root, 'partial', False):
-                return missing
-
+        if value is missing:
             if self.required:
                 self._fail('required')
 
-            return self.get_default()
+            return self._get_default()
 
         validated_value = self._load(value)
         self._validate(validated_value)
         return validated_value
 
-    @property
-    def root(self):
-        """
-        Returns the top-level serializer for this field.
-        """
-        root = getattr(self, '_cached_root')
-        if root:
-            return root
+    cpdef _get_default(self):
+        if self.default_ is missing:
+            return missing
 
-        root = self
-        while root.parent is not None:
-            root = root.parent
+        if callable(self.default_):
+            return self.default_()
 
-        setattr(self, '_cached_root', root)
-
-        return root
+        return self.default_
 
     cpdef _dump(self, value):
         raise NotImplementedError()
@@ -133,26 +105,26 @@ cdef class Field(object):
     def _fail(self, key, **kwargs):
         try:
             message = self.error_messages[key]
-            message = formatting.format_error_message(message, **kwargs)
-            if isinstance(message, dict):
-                raise ValidationError(**message)
+            if kwargs:
+                message = message.format(**kwargs)
             raise ValidationError(message)
         except KeyError:
             class_name = self.__class__.__name__
-            message = formatting.format_error_message(MISSING_ERROR_MESSAGE, class_name=class_name, key=key)
+            message = MISSING_ERROR_MESSAGE.format(class_name=class_name, key=key)
             raise AssertionError(message)
 
     cpdef _validate(self, value):
         errors = []
+
         for validator in self.validators:
             try:
                 if validator(value) is False:
                     self._fail('validator_failed')
             except ValidationError as err:
-                if isinstance(err.message, dict):
-                    raise
-
-                errors.append(err)
+                if isinstance(err.messages, dict):
+                    errors.append(err.messages)
+                else:
+                    errors.extend(err.messages)
 
         if errors:
             raise ValidationError(errors)
@@ -161,15 +133,103 @@ cdef class Field(object):
     #     return copy.copy(self)
 
 
-cdef class IntegerField(Field):
+cdef class BooleanField(Field):
     default_error_messages = {
-        'invalid': 'A valid integer is required.',
-        'max_value': 'Must be at most {max_value}.',
-        'min_value': 'Must be at least {min_value}.'
+        'invalid': '"{value}" is not a valid boolean.'
     }
 
-    cdef public object min_value
-    cdef public object max_value
+    TRUE_VALUES = {'t', 'T', 'true', 'True', 'TRUE', '1', 1, True}
+    FALSE_VALUES = {'f', 'F', 'false', 'False', 'FALSE', '0', 0, 0.0, False}
+
+    cpdef _load(self, value):
+        if isinstance(value, bool):
+            return value
+
+        try:
+            if value in self.TRUE_VALUES:
+                return True
+
+            if value in self.FALSE_VALUES:
+                return False
+        except TypeError:
+            pass
+
+        self._fail('invalid', value=value)
+
+    cpdef _dump(self, value):
+        if isinstance(value, bool):
+            return value
+
+        if value in self.TRUE_VALUES:
+            return True
+
+        if value in self.FALSE_VALUES:
+            return False
+
+        return bool(value)
+
+
+cdef class DateField(Field):
+    default_error_messages = {
+        'invalid': 'Date has wrong format.',
+    }
+
+    cpdef _load(self, value):
+        if isinstance(value, datetime.datetime):
+            return value.date()
+
+        if isinstance(value, datetime.date):
+            return value
+
+        try:
+            parsed = ciso8601.parse_datetime_unaware(value)
+            if parsed is not None:
+                return parsed
+        except (ValueError, TypeError):
+            pass
+
+        self._fail('invalid')
+
+    cpdef _dump(self, value):
+        if isinstance(value, datetime.datetime):
+            return value.date().isoformat()
+
+        return value.isoformat()
+
+
+cdef class DateTime(Field):
+    default_error_messages = {
+        'invalid': 'Datetime has wrong format.',
+        'date': 'Expected a datetime but got a date.',
+    }
+
+    cpdef _load(self, value):
+        if isinstance(value, datetime.datetime):
+            return value
+
+        if isinstance(value, datetime.date):
+            self._fail('date')
+
+        try:
+
+            parsed = ciso8601.parse_datetime(value)
+            if parsed is not None:
+                return parsed
+        except (ValueError, TypeError):
+            pass
+
+        self._fail('invalid')
+
+    cpdef _dump(self, value):
+        return value.isoformat()
+
+
+cdef class Float(Field):
+    default_error_messages = {
+        'invalid': 'A valid number is required.',
+        'max_value': 'Ensure this value is less than or equal to {max_value}.',
+        'min_value': 'Ensure this value is greater than or equal to {min_value}.',
+    }
 
     def __init__(self, min_value=None, max_value=None, **kwargs):
         super().__init__(**kwargs)
@@ -177,7 +237,38 @@ cdef class IntegerField(Field):
         self.max_value = max_value
 
         if self.min_value is not None or self.max_value is not None:
-            self.validators.append(RangeValidator(min_value, max_value, self.error_messages))
+            self.validators.append(validators.Range(min_value, max_value, self.error_messages))
+
+    cpdef _load(self, value):
+        if isinstance(value, float):
+            return value
+
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            self._fail('invalid')
+
+    cpdef _dump(self, value):
+        if isinstance(value, float):
+            return value
+
+        return float(value)
+
+
+cdef class Integer(Field):
+    default_error_messages = {
+        'invalid': 'A valid integer is required.',
+        'max_value': 'Must be at most {max_value}.',
+        'min_value': 'Must be at least {min_value}.'
+    }
+
+    def __init__(self, min_value=None, max_value=None, **kwargs):
+        super().__init__(**kwargs)
+        self.min_value = min_value
+        self.max_value = max_value
+
+        if self.min_value is not None or self.max_value is not None:
+            self.validators.append(validators.Range(min_value, max_value, self.error_messages))
 
     cpdef _load(self, value):
         if isinstance(value, int):
@@ -195,17 +286,55 @@ cdef class IntegerField(Field):
         return int(value)
 
 
-cdef class StringField(Field):
+cdef class List(Field):
+    default_error_messages = {
+        'invalid': 'Not a valid list.',
+        'empty': 'This list may not be empty.'
+    }
+
+    def __init__(self, child, allow_empty=True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.child = child
+        self.allow_empty = allow_empty
+
+    cpdef _load(self, value):
+        """
+        List of dicts of native values <- List of dicts of primitive datatypes.
+        """
+        if not isinstance(value, list):
+            self._fail('invalid')
+
+        if not self.allow_empty and len(value) == 0:
+            self._fail('empty')
+
+        result = []
+        errors = {}
+
+        for idx, item in enumerate(value):
+            try:
+                result.append(self.child.load(item))
+            except ValidationError as e:
+                errors.update({idx: e.messages})
+
+        if errors:
+            raise ValidationError(errors)
+
+        return result
+
+    cpdef _dump(self, value):
+        """
+        List of object instances -> List of dicts of primitive datatypes.
+        """
+        return [self.child.dump(item) for item in value]
+
+
+cdef class String(Field):
     default_error_messages = {
         'blank': 'This field may not be blank.',
         'max_length': 'Longer than maximum length {max_length}.',
         'min_length': 'Shorter than minimum length {min_length}.'
     }
-
-    cdef public object allow_blank
-    cdef public object trim_whitespace
-    cdef public object min_length
-    cdef public object max_length
 
     def __init__(self, allow_blank=False, trim_whitespace=False, min_length=None, max_length=None, **kwargs):
         super().__init__(**kwargs)
@@ -216,7 +345,7 @@ cdef class StringField(Field):
 
         if self.min_length is not None or self.max_length is not None:
             self.validators.append(
-                LengthValidator(self.min_length, self.max_length, error_messages=self.error_messages))
+                validators.Length(self.min_length, self.max_length, error_messages=self.error_messages))
 
     cpdef _load(self, value):
         if not isinstance(value, str):
@@ -238,171 +367,23 @@ cdef class StringField(Field):
         return str(value)
 
 
-cdef class Contract(Field):
+cdef class UUID(Field):
     default_error_messages = {
-        'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
+        'invalid': '"{value}" is not a valid UUID.',
     }
 
-    cdef public object many
-    cdef public object only
-    cdef public object partial
-    cdef public object fields
-    cdef public object _declared_fields
-    cdef public object _load_fields
-    cdef public object _dump_fields
+    cpdef _load(self, value):
+        if isinstance(value, uuid.UUID):
+            return value
 
-    def __init__(self, many=False, only=None, partial=False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        try:
+            return uuid.UUID(hex=value)
+        except (AttributeError, ValueError):
+            self._fail('invalid', value=value)
 
-        if not self._declared_fields:
-            self._declared_fields = self._get_declared_fields()
+    cpdef _dump(self, value):
+        if not isinstance(value, uuid.UUID):
+            return str(value)
 
-        only = only or ()
-        if not isinstance(only, (list, tuple)):
-            raise AssertionError('`only` has to be a list or tuple')
-
-        self.many = many
-        self.only = only or ()
-        self.partial = partial
-        # self.fields = copy.deepcopy(self._declared_fields)
-        self.fields = self._declared_fields
-
-        if self.only:
-            field_names = set(self.only)
-        else:
-            field_names = set(self.fields)
-
-        self._load_fields = []
-        self._dump_fields = []
-
-        for field_name, field in self.fields.items():
-            field.bind(field_name, self)
-
-            if field.field_name in field_names:
-                if field.load_only:
-                    self._load_fields.append(field)
-                elif field.dump_only:
-                    self._dump_fields.append(field)
-                else:
-                    self._dump_fields.append(field)
-                    self._load_fields.append(field)
-
-    cpdef pre_dump(self, data):
-        return data
-
-    cpdef pre_dump_many(self, data):
-        return data
-
-    cpdef pre_load(self, data):
-        return data
-
-    cpdef pre_load_many(self, data):
-        return data
-
-    cpdef post_dump(self, data, original_data):
-        return data
-
-    cpdef post_dump_many(self, data, original_data):
-        return data
-
-    cpdef post_load(self, data, original_data):
-        return data
-
-    cpdef post_load_many(self, data, original_data):
-        return data
-
-    cpdef _get_declared_fields(self):
-        fields = []
-
-        for attr_name in dir(self):
-            attr_value = getattr(self, attr_name, None)
-            if isinstance(attr_value, Field):
-                fields.append((attr_name, attr_value))
-
-        #for attr_name, attr_value in list(attrs.items()):
-        #    if isinstance(attr_value, Field):
-        #        fields.append((attr_name, attrs.pop(attr_name)))
-
-        #for base in reversed(bases):
-        #    if hasattr(base, '_declared_fields'):
-        #        fields = list(base._declared_fields.items()) + fields
-
-        return dict(fields)
-
-    cdef inline _get_value(self, data, field_name):
-        if isinstance(data, dict):
-            return data.get(field_name, missing)
-
-        return getattr(data, field_name, missing)
-
-    cpdef _dump(self, data):
-        if self.many:
-            return self._dump_many(data)
-        else:
-            return self._dump_single(data)
-
-    cdef inline _dump_many(self, data):
-        items = []
-
-        for item in data:
-            items.append(self._dump_single(item))
-
-        return items
-
-    cdef inline _dump_single(self, data):
-        result = dict()
-
-        data = self.pre_dump(data)
-
-        for field in self._dump_fields:
-            raw = self._get_value(data, field.field_name)
-
-            value = field.dump(raw)
-
-            if value is not missing:
-                result[field.dump_to] = value
-
-        return self.post_dump(result, data)
-
-    cpdef _load(self, data):
-        if self.many:
-            return self._load_many(data)
-        else:
-            return self._load_single(data)
-
-    cdef inline _load_many(self, data):
-        data = self.pre_load_many(data)
-
-        items = []
-
-        for item in data:
-            items.append(self._load_single(item))
-
-        items = self.post_load_many(items, data)
-
-        return items
-
-    cdef inline _load_single(self, data):
-        if not isinstance(data, dict):
-            self._fail('invalid', datatype=type(data).__name__)
-
-        data = self.pre_load(data)
-
-        result = dict()
-        errors = dict()
-
-        for field in self._load_fields:
-            try:
-                raw = self._get_value(data, field.load_from)
-
-                value = field.load(raw)
-
-                if value is not missing:
-                    result[field.field_name] = value
-            except ValidationError as err:
-                errors[field.field_name] = err
-
-        if errors:
-            raise ValidationError(errors)
-
-        return self.post_load(result, data)
+        cdef str hex = '%032x' % value.int
+        return hex[:8] + '-' + hex[8:12] + '-' + hex[12:16] + '-' + hex[16:20] + '-' + hex[20:]
