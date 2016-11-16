@@ -10,22 +10,21 @@ cdef class Contract(Field):
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
 
-    def __init__(self, many=False, only=None, partial=False, **kwargs):
+    def __init__(self, many=False, only=None, exclude=None, **kwargs):
         super().__init__(**kwargs)
 
-        only = only or ()
-        if not isinstance(only, (list, tuple)):
-            raise AssertionError('`only` has to be a list or tuple')
-
         self.many = many
-        self.only = only or ()
-        self.partial = partial
+        self.only = only
+        self.exclude = exclude
         self.fields = self._get_declared_fields()
 
         if self.only:
             field_names = set(self.only)
         else:
             field_names = set(self.fields)
+
+        if self.exclude:
+            field_names = field_names - set(self.exclude)
 
         self._load_fields = []
         self._dump_fields = []
@@ -73,14 +72,6 @@ cdef class Contract(Field):
             attr_value = getattr(self, attr_name, None)
             if isinstance(attr_value, Field):
                 fields.append((attr_name, attr_value))
-
-        #for attr_name, attr_value in list(attrs.items()):
-        #    if isinstance(attr_value, Field):
-        #        fields.append((attr_name, attrs.pop(attr_name)))
-
-        #for base in reversed(bases):
-        #    if hasattr(base, '_declared_fields'):
-        #        fields = list(base._declared_fields.items()) + fields
 
         return dict(fields)
 

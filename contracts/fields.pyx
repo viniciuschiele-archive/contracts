@@ -382,8 +382,5 @@ cdef class UUID(Field):
             self._fail('invalid', value=value)
 
     cpdef _dump(self, value):
-        if not isinstance(value, uuid.UUID):
-            return str(value)
-
         cdef str hex = '%032x' % value.int
         return hex[:8] + '-' + hex[8:12] + '-' + hex[12:16] + '-' + hex[16:20] + '-' + hex[20:]
