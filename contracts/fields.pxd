@@ -21,6 +21,10 @@ cdef class Field(object):
     cpdef _validate(self, value)
 
 
+cdef class Boolean(Field):
+    pass
+
+
 cdef class Date(Field):
     pass
 

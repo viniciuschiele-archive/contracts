@@ -1,3 +1,5 @@
+cimport cython
+
 from .exceptions import ValidationError
 from .fields cimport Field
 from .utils import missing
@@ -102,12 +104,18 @@ cdef class Contract(Field):
 
         return items
 
+    @cython.boundscheck(False)
     cdef inline _dump_single(self, data):
-        result = dict()
-
         data = self.pre_dump(data)
 
-        for field in self._dump_fields:
+        cdef dict result = dict()
+
+        cdef list dump_fields = self._dump_fields
+        cdef int count = len(dump_fields)
+
+        for i in range(count):
+            field = dump_fields[i]
+
             raw = self._get_value(data, field.name)
 
             value = field.dump(raw)
@@ -135,16 +143,22 @@ cdef class Contract(Field):
 
         return items
 
+    @cython.boundscheck(False)
     cdef inline _load_single(self, data):
         if not isinstance(data, dict):
             self._fail('invalid', datatype=type(data).__name__)
 
         data = self.pre_load(data)
 
-        result = dict()
-        errors = dict()
+        cdef dict result = dict()
+        cdef dict errors = dict()
 
-        for field in self._load_fields:
+        cdef list load_fields = self._load_fields
+        cdef int count = len(load_fields)
+
+        for i in range(count):
+            field = load_fields[i]
+
             try:
                 raw = self._get_value(data, field.load_from)
 

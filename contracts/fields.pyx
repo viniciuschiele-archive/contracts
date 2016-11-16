@@ -133,7 +133,7 @@ cdef class Field(object):
     #     return copy.copy(self)
 
 
-cdef class BooleanField(Field):
+cdef class Boolean(Field):
     default_error_messages = {
         'invalid': '"{value}" is not a valid boolean.'
     }
@@ -169,7 +169,7 @@ cdef class BooleanField(Field):
         return bool(value)
 
 
-cdef class DateField(Field):
+cdef class Date(Field):
     default_error_messages = {
         'invalid': 'Date has wrong format.',
     }
