@@ -5,10 +5,12 @@ from .fields cimport Field
 from .utils import missing
 
 
-cdef class Contract(Field):
+cdef class BaseContract(Field):
     default_error_messages = {
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
+
+    _declared_fields = {}
 
     def __init__(self, many=False, only=None, exclude=None, **kwargs):
         super().__init__(**kwargs)
@@ -16,12 +18,11 @@ cdef class Contract(Field):
         self.many = many
         self.only = only
         self.exclude = exclude
-        self.fields = self._get_declared_fields()
 
         if self.only:
             field_names = set(self.only)
         else:
-            field_names = set(self.fields)
+            field_names = set(self._declared_fields)
 
         if self.exclude:
             field_names = field_names - set(self.exclude)
@@ -29,7 +30,7 @@ cdef class Contract(Field):
         self._load_fields = []
         self._dump_fields = []
 
-        for field_name, field in self.fields.items():
+        for field_name, field in self._declared_fields.items():
             field.bind(field_name, self)
 
             if field.name in field_names:
@@ -64,16 +65,6 @@ cdef class Contract(Field):
 
     cpdef post_load_many(self, data, original_data):
         return data
-
-    cpdef _get_declared_fields(self):
-        fields = []
-
-        for attr_name in dir(self):
-            attr_value = getattr(self, attr_name, None)
-            if isinstance(attr_value, Field):
-                fields.append((attr_name, attr_value))
-
-        return dict(fields)
 
     cdef inline _get_value(self, data, field_name):
         if isinstance(data, dict):
@@ -164,3 +155,27 @@ cdef class Contract(Field):
             raise ValidationError(errors)
 
         return self.post_load(result, data)
+
+
+class ContractMeta(type):
+    def __new__(mcs, name, bases, attrs):
+        attrs['_declared_fields'] = mcs.get_declared_fields(bases, attrs)
+        return super(ContractMeta, mcs).__new__(mcs, name, bases, attrs)
+
+    @classmethod
+    def get_declared_fields(mcs, bases, attrs):
+        fields = []
+
+        for attr_name, attr_value in list(attrs.items()):
+            if isinstance(attr_value, Field):
+                fields.append((attr_name, attrs.pop(attr_name)))
+
+        for base in reversed(bases):
+            if hasattr(base, '_declared_fields'):
+                fields = list(base._declared_fields.items()) + fields
+
+        return dict(fields)
+
+
+class Contract(BaseContract, metaclass=ContractMeta):
+    pass

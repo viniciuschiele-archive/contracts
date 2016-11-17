@@ -1,11 +1,10 @@
 from .fields cimport Field
 
 
-cdef class Contract(Field):
+cdef class BaseContract(Field):
     cdef public object many
     cdef public object only
-    cdef public object partial
-    cdef public object fields
+    cdef public object exclude
     cdef list _load_fields
     cdef list _dump_fields
 
@@ -19,7 +18,6 @@ cdef class Contract(Field):
     cpdef pre_load_many(self, data)
     cpdef post_load_many(self, data, original_data)
 
-    cpdef _get_declared_fields(self)
     cpdef _dump(self, data)
     cpdef _load(self, data)
 
