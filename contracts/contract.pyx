@@ -1,6 +1,6 @@
 cimport cython
 
-from .exceptions import ValidationError
+from .exceptions cimport ValidationError
 from .fields cimport Field
 from .utils import missing
 

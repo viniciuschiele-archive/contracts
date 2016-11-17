@@ -7,7 +7,7 @@ import datetime
 import uuid
 
 from . cimport validators
-from .exceptions import ValidationError
+from .exceptions cimport ValidationError
 from .utils import missing
 
 MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key `{key}` does ' \
