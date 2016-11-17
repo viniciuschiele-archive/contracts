@@ -1,4 +1,4 @@
-class missing(object):
+cdef class missing(object):
     """
     This class is used to represent no data being provided for a given input
     or output value.

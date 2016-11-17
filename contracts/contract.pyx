@@ -2,7 +2,7 @@ cimport cython
 
 from .exceptions cimport ValidationError
 from .fields cimport Field
-from .utils import missing
+from .utils cimport missing
 
 
 cdef class BaseContract(Field):

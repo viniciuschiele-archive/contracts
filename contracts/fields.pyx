@@ -8,7 +8,7 @@ import uuid
 
 from . cimport validators
 from .exceptions cimport ValidationError
-from .utils import missing
+from .utils cimport missing
 
 MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key `{key}` does ' \
                         'not exist in the `error_messages` dictionary.'
@@ -97,10 +97,10 @@ cdef class Field(object):
         return self.default_
 
     cpdef _dump(self, value):
-        raise NotImplementedError()
+        return value
 
     cpdef _load(self, value):
-        raise NotImplementedError()
+        return value
 
     def _fail(self, key, **kwargs):
         try:
@@ -327,6 +327,30 @@ cdef class List(Field):
         List of object instances -> List of dicts of primitive datatypes.
         """
         return [self.child.dump(item) for item in value]
+
+
+cdef class Method(Field):
+    def __init__(self, dump_method_name=None, load_method_name=None, **kwargs):
+        super(Method, self).__init__(**kwargs)
+
+        self.dump_method_name = dump_method_name
+        self.load_method_name = load_method_name
+
+    cpdef _dump(self, value):
+        if not self.dump_method_name:
+            return missing
+
+        method = getattr(self.parent, self.dump_method_name)
+
+        return method(value)
+
+    cpdef _load(self, value):
+        if not self.load_method_name:
+            return missing
+
+        method = getattr(self.parent, self.load_method_name)
+
+        return method(value)
 
 
 cdef class String(Field):

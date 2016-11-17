@@ -11,5 +11,5 @@ setup(
                            'contracts/exceptions.pyx',
                            'contracts/fields.pyx',
                            'contracts/validators.pyx',
-                           'contracts/utils/__init__.py'))
+                           'contracts/utils/__init__.pyx'))
 )

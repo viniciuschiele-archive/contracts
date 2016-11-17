@@ -48,6 +48,10 @@ cdef class List(Field):
     cdef public object allow_empty
 
 
+cdef class Method(Field):
+    cdef public object dump_method_name
+    cdef public object load_method_name
+
 cdef class String(Field):
     cdef public object allow_blank
     cdef public object trim_whitespace
