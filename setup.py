@@ -15,6 +15,7 @@ USE_CYTHON = has_option('cython')
 ext = '.pyx' if USE_CYTHON else '.c'
 
 extensions = [
+    Extension('contracts.abc', ['contracts/abc'+ext]),
     Extension('contracts.contract', ['contracts/contract'+ext]),
     Extension('contracts.exceptions', ['contracts/exceptions'+ext]),
     Extension('contracts.fields', ['contracts/fields'+ext]),

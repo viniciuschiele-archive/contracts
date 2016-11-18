@@ -1,21 +1,20 @@
 cimport cython
 
 from collections import defaultdict
+from . cimport abc
 from .exceptions cimport ValidationError
 from .fields cimport Field
 from .utils cimport missing
 
 
-cdef class BaseContract(Field):
+cdef class BaseContract(abc.Contract):
     default_error_messages = {
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
 
     _declared_fields = {}
 
-    def __init__(self, many=False, only=None, exclude=None, **kwargs):
-        super().__init__(**kwargs)
-
+    def __init__(self, bint many=False, set only=None, set exclude=None):
         self.many = many
         self.only = only
         self.exclude = exclude
@@ -24,6 +23,18 @@ cdef class BaseContract(Field):
         self._dump_fields = []
 
         self._prepare_fields()
+
+    cpdef object dump(self, object data):
+        if self.many:
+            return self._dump_many(data)
+        else:
+            return self._dump_single(data)
+
+    cpdef object load(self, object data):
+        if self.many:
+            return self._load_many(data)
+        else:
+            return self._load_single(data)
 
     cpdef _prepare_fields(self):
         if self.only:
@@ -50,7 +61,7 @@ cdef class BaseContract(Field):
                     self._dump_fields.append(field)
                     self._load_fields.append(field)
 
-    cpdef _prepare_nested_fields(self, option_name, field_names):
+    cpdef _prepare_nested_fields(self, str option_name, set field_names):
         nested_fields = [name.split('.', 1) for name in field_names if '.' in name]
 
         nested_options = defaultdict(list)
@@ -60,13 +71,13 @@ cdef class BaseContract(Field):
         for key, options in iter(nested_options.items()):
             setattr(self._declared_fields[key], option_name, set(options))
 
-    cpdef _dump(self, data):
-        if self.many:
-            return self._dump_many(data)
-        else:
-            return self._dump_single(data)
+    cdef inline object _get_value(self, object data, str field_name):
+        if isinstance(data, dict):
+            return data.get(field_name, missing)
 
-    cdef inline _dump_many(self, data):
+        return getattr(data, field_name, missing)
+
+    cdef inline object _dump_many(self, object data):
         items = []
 
         for item in data:
@@ -75,7 +86,7 @@ cdef class BaseContract(Field):
         return items
 
     @cython.boundscheck(False)
-    cdef inline _dump_single(self, data):
+    cdef inline object _dump_single(self, object data):
         data = self.pre_dump(data)
 
         cdef dict result = dict()
@@ -95,13 +106,7 @@ cdef class BaseContract(Field):
 
         return self.post_dump(result, data)
 
-    cpdef _load(self, data):
-        if self.many:
-            return self._load_many(data)
-        else:
-            return self._load_single(data)
-
-    cdef inline _load_many(self, data):
+    cdef inline object _load_many(self, object data):
         data = self.pre_load_many(data)
 
         items = []
@@ -114,7 +119,7 @@ cdef class BaseContract(Field):
         return items
 
     @cython.boundscheck(False)
-    cdef inline _load_single(self, data):
+    cdef inline object _load_single(self, object data):
         if not isinstance(data, dict):
             self._fail('invalid', datatype=type(data).__name__)
 
@@ -144,35 +149,29 @@ cdef class BaseContract(Field):
 
         return self.post_load(result, data)
 
-    cpdef pre_dump(self, data):
+    cpdef object pre_dump(self, object data):
         return data
 
-    cpdef pre_dump_many(self, data):
+    cpdef object pre_dump_many(self, object data):
         return data
 
-    cpdef pre_load(self, data):
+    cpdef object pre_load(self, object data):
         return data
 
-    cpdef pre_load_many(self, data):
+    cpdef object pre_load_many(self, object data):
         return data
 
-    cpdef post_dump(self, data, original_data):
+    cpdef object post_dump(self, object data, object original_data):
         return data
 
-    cpdef post_dump_many(self, data, original_data):
+    cpdef object post_dump_many(self, object data, object original_data):
         return data
 
-    cpdef post_load(self, data, original_data):
+    cpdef object post_load(self, object data, object original_data):
         return data
 
-    cpdef post_load_many(self, data, original_data):
+    cpdef object post_load_many(self, object data, object original_data):
         return data
-
-    cdef inline _get_value(self, data, field_name):
-        if isinstance(data, dict):
-            return data.get(field_name, missing)
-
-        return getattr(data, field_name, missing)
 
 
 class ContractMeta(type):

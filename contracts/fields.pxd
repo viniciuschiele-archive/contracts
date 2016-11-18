@@ -1,24 +1,23 @@
-cdef class Field(object):
-    cdef public object dump_only
-    cdef public object load_only
+from . cimport abc
+
+
+cdef class Field(abc.Field):
+    cdef public str name
+    cdef public abc.Contract parent
+    cdef public bint dump_only
+    cdef public bint load_only
     cdef public object default_
-    cdef public object allow_none
+    cdef public bint allow_none
     cdef public str dump_to
     cdef public str load_from
-    cdef public object required
-    cdef public str name
-    cdef public object parent
+    cdef public bint required
     cdef public list validators
     cdef public dict error_messages
 
-    cpdef bind(self, name, parent)
-    cpdef dump(self, value)
-    cpdef load(self, value)
-
-    cpdef _get_default(self)
-    cpdef _dump(self, value)
-    cpdef _load(self, value)
-    cpdef _validate(self, value)
+    cpdef object _get_default(self)
+    cpdef object _dump(self, object value)
+    cpdef object _load(self, object value)
+    cpdef _validate(self, object value)
 
 
 cdef class Boolean(Field):
@@ -44,26 +43,26 @@ cdef class Integer(Field):
 
 
 cdef class List(Field):
-    cdef public object child
-    cdef public object allow_empty
+    cdef public abc.Field child
+    cdef public bint allow_empty
 
 
 cdef class Method(Field):
-    cdef public object dump_method_name
-    cdef public object load_method_name
+    cdef public str dump_method_name
+    cdef public str load_method_name
 
 
 cdef class Nested(Field):
     cdef public object nested
-    cdef public object many
-    cdef public object only
-    cdef public object exclude
-    cdef public object _instance
+    cdef public bint many
+    cdef public set only
+    cdef public set exclude
+    cdef public abc.Contract _instance
 
 
 cdef class String(Field):
-    cdef public object allow_blank
-    cdef public object trim_whitespace
+    cdef public bint allow_blank
+    cdef public bint trim_whitespace
     cdef public object min_length
     cdef public object max_length
 
