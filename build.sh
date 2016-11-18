@@ -2,4 +2,4 @@
 find ./contracts -type f -name '*.so' -delete
 find ./contracts -type f -name '*.c' -delete
 
-python setup.py build_ext --inplace
+python setup.py build_ext --inplace --cython
