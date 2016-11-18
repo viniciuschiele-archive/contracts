@@ -1,5 +1,6 @@
 cimport cython
 
+from collections import defaultdict
 from .exceptions cimport ValidationError
 from .fields cimport Field
 from .utils cimport missing
@@ -19,16 +20,23 @@ cdef class BaseContract(Field):
         self.only = only
         self.exclude = exclude
 
+        self._load_fields = []
+        self._dump_fields = []
+
+        self._prepare_fields()
+
+    cpdef _prepare_fields(self):
         if self.only:
-            field_names = set(self.only)
+            self._prepare_nested_fields('only', self.only)
+            self.only = set([field_name.split('.', 1)[0] for field_name in self.only])
+            field_names = self.only
         else:
             field_names = set(self._declared_fields)
 
         if self.exclude:
+            self._prepare_nested_fields('exclude', self.exclude)
+            self.exclude = set([field_name for field_name in self.exclude if '.' not in field_name])
             field_names = field_names - set(self.exclude)
-
-        self._load_fields = []
-        self._dump_fields = []
 
         for field_name, field in self._declared_fields.items():
             field.bind(field_name, self)
@@ -42,35 +50,15 @@ cdef class BaseContract(Field):
                     self._dump_fields.append(field)
                     self._load_fields.append(field)
 
-    cpdef pre_dump(self, data):
-        return data
+    cpdef _prepare_nested_fields(self, option_name, field_names):
+        nested_fields = [name.split('.', 1) for name in field_names if '.' in name]
 
-    cpdef pre_dump_many(self, data):
-        return data
+        nested_options = defaultdict(list)
+        for parent, nested_names in nested_fields:
+            nested_options[parent].append(nested_names)
 
-    cpdef pre_load(self, data):
-        return data
-
-    cpdef pre_load_many(self, data):
-        return data
-
-    cpdef post_dump(self, data, original_data):
-        return data
-
-    cpdef post_dump_many(self, data, original_data):
-        return data
-
-    cpdef post_load(self, data, original_data):
-        return data
-
-    cpdef post_load_many(self, data, original_data):
-        return data
-
-    cdef inline _get_value(self, data, field_name):
-        if isinstance(data, dict):
-            return data.get(field_name, missing)
-
-        return getattr(data, field_name, missing)
+        for key, options in iter(nested_options.items()):
+            setattr(self._declared_fields[key], option_name, set(options))
 
     cpdef _dump(self, data):
         if self.many:
@@ -155,6 +143,36 @@ cdef class BaseContract(Field):
             raise ValidationError(errors)
 
         return self.post_load(result, data)
+
+    cpdef pre_dump(self, data):
+        return data
+
+    cpdef pre_dump_many(self, data):
+        return data
+
+    cpdef pre_load(self, data):
+        return data
+
+    cpdef pre_load_many(self, data):
+        return data
+
+    cpdef post_dump(self, data, original_data):
+        return data
+
+    cpdef post_dump_many(self, data, original_data):
+        return data
+
+    cpdef post_load(self, data, original_data):
+        return data
+
+    cpdef post_load_many(self, data, original_data):
+        return data
+
+    cdef inline _get_value(self, data, field_name):
+        if isinstance(data, dict):
+            return data.get(field_name, missing)
+
+        return getattr(data, field_name, missing)
 
 
 class ContractMeta(type):

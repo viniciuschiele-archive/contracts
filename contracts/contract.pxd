@@ -18,6 +18,8 @@ cdef class BaseContract(Field):
     cpdef pre_load_many(self, data)
     cpdef post_load_many(self, data, original_data)
 
+    cpdef _prepare_fields(self)
+    cpdef _prepare_nested_fields(self, option_name, field_names)
     cpdef _dump(self, data)
     cpdef _load(self, data)
 

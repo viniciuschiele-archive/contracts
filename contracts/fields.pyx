@@ -353,6 +353,29 @@ cdef class Method(Field):
         return method(value)
 
 
+cdef class Nested(Field):
+    def __init__(self, nested, many=False, only=None, exclude=None, **kwargs):
+        super(Nested, self).__init__(**kwargs)
+
+        self.nested = nested
+        self.many = many
+        self.only = only
+        self.exclude = exclude
+
+        self._instance = None
+
+    cpdef bind(self, name, parent):
+        super(Nested, self).bind(name, parent)
+
+        self._instance = self.nested(many=self.many, only=self.only, exclude=self.exclude)
+
+    cpdef _load(self, value):
+        return self._instance.load(value)
+
+    cpdef _dump(self, value):
+        return self._instance.dump(value)
+
+
 cdef class String(Field):
     default_error_messages = {
         'blank': 'This field may not be blank.',

@@ -52,6 +52,15 @@ cdef class Method(Field):
     cdef public object dump_method_name
     cdef public object load_method_name
 
+
+cdef class Nested(Field):
+    cdef public object nested
+    cdef public object many
+    cdef public object only
+    cdef public object exclude
+    cdef public object _instance
+
+
 cdef class String(Field):
     cdef public object allow_blank
     cdef public object trim_whitespace
