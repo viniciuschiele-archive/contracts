@@ -1,8 +1,8 @@
 cdef class Contract(object):
-    cpdef object dump(self, object value):
+    cpdef object dump(self, object value, dict context=None):
         raise NotImplemented()
 
-    cpdef object load(self, object value):
+    cpdef object load(self, object value, dict context=None):
         raise NotImplemented()
 
 
