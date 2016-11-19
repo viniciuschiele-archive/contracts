@@ -72,8 +72,11 @@ cdef class BaseContract(abc.Contract):
             setattr(self._declared_fields[key], option_name, set(options))
 
     cdef inline object _get_value(self, object data, str field_name):
+        cdef dict d
+
         if isinstance(data, dict):
-            return data.get(field_name, missing)
+            d = <dict>data
+            return d.get(field_name, missing)
 
         return getattr(data, field_name, missing)
 
@@ -92,7 +95,6 @@ cdef class BaseContract(abc.Contract):
         data = self.pre_dump(data, context)
 
         cdef dict result = dict()
-
         cdef list dump_fields = self._dump_fields
         cdef int count = len(dump_fields)
 
@@ -131,9 +133,12 @@ cdef class BaseContract(abc.Contract):
 
         cdef dict result = dict()
         cdef dict errors = None
-
         cdef list load_fields = self._load_fields
         cdef int count = len(load_fields)
+
+        cdef Field field
+        cdef object raw
+        cdef object value
 
         for i in range(count):
             field = load_fields[i]
