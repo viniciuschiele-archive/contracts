@@ -5,6 +5,7 @@ cdef class BaseContract(abc.Contract):
     cdef public bint many
     cdef public set only
     cdef public set exclude
+    cdef public bint partial
     cdef list _load_fields
     cdef list _dump_fields
 

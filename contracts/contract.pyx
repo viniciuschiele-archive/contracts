@@ -14,10 +14,11 @@ cdef class BaseContract(abc.Contract):
 
     _declared_fields = {}
 
-    def __init__(self, bint many=False, set only=None, set exclude=None):
+    def __init__(self, bint many=False, set only=None, set exclude=None, bint partial=False):
         self.many = many
         self.only = only
         self.exclude = exclude
+        self.partial = partial
 
         self._load_fields = []
         self._dump_fields = []
@@ -145,6 +146,9 @@ cdef class BaseContract(abc.Contract):
 
             try:
                 raw = self._get_value(data, field.load_from)
+
+                if self.partial and raw is missing:
+                    continue
 
                 value = field.load(raw)
 
