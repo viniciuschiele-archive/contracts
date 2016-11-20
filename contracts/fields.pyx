@@ -53,6 +53,7 @@ cdef class Field(abc.Field):
 
         self.name = None
         self.parent = None
+        self._decorator_validators = []
 
     cpdef bind(self, str name, abc.Contract parent):
         self.name = name
@@ -63,6 +64,9 @@ cdef class Field(abc.Field):
 
         if not self.load_from:
             self.load_from = name
+
+        for validator in self._decorator_validators:
+            self.validators.append(getattr(parent, validator))
 
     cpdef object dump(self, object value):
         if value is missing:
@@ -88,6 +92,10 @@ cdef class Field(abc.Field):
         validated_value = self._load(value)
         self._validate(validated_value)
         return validated_value
+
+    cpdef validator(self, func):
+        self._decorator_validators.append(func.__name__)
+        return func
 
     cpdef _get_default(self):
         if self.default_ is missing:

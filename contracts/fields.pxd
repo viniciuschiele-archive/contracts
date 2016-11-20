@@ -13,6 +13,9 @@ cdef class Field(abc.Field):
     cdef public bint required
     cdef public list validators
     cdef public dict error_messages
+    cdef list _decorator_validators
+
+    cpdef validator(self, func)
 
     cpdef object _get_default(self)
     cpdef object _dump(self, object value)
