@@ -40,8 +40,8 @@ cdef class Range(Validator):
     :param max_value: The maximum value (upper bound). If not provided, maximum value will not be checked.
     :param dict error_messages: The error messages for various kinds of errors.
     """
-    cdef public object min_length
-    cdef public object max_length
+    cdef public object min_value
+    cdef public object max_value
 
 
 
