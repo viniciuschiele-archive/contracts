@@ -185,7 +185,7 @@ cdef class Boolean(Field):
         if value in self._true_values:
             return True
 
-        if value in self._false_valus:
+        if value in self._false_values:
             return False
 
         return bool(value)
@@ -275,6 +275,26 @@ cdef class Float(Field):
             return value
 
         return float(value)
+
+
+cdef class Function(Field):
+    def __init__(self, object dump_func=None, object load_func=None, **kwargs):
+        super(Function, self).__init__(**kwargs)
+
+        self.dump_func = dump_func
+        self.load_func = load_func
+
+    cpdef object _dump(self, object value):
+        if not self.dump_method:
+            return missing
+
+        return self.dump_method(value)
+
+    cpdef object _load(self, object value):
+        if not self.load_method:
+            return missing
+
+        return self.load_method(value)
 
 
 cdef class Integer(Field):

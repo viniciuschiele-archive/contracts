@@ -42,6 +42,11 @@ cdef class Float(Field):
     cdef public object max_value
 
 
+cdef class Function(Field):
+    cdef public object dump_method
+    cdef public object load_method
+
+
 cdef class Integer(Field):
     cdef public object min_value
     cdef public object max_value
