@@ -7,6 +7,9 @@ from .fields cimport Field
 from .utils cimport missing
 
 
+DEFAULT_FIELD_NAME = '_contract'
+
+
 cdef class BaseContract(abc.Contract):
     default_error_messages = {
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
@@ -127,13 +130,13 @@ cdef class BaseContract(abc.Contract):
 
     @cython.boundscheck(False)
     cdef inline object _load_single(self, object data, dict context):
-        if not isinstance(data, dict):
-            self._fail('invalid', datatype=type(data).__name__)
+        try:
+            data = self.pre_load(data, context)
+        except ValidationError as err:
+            raise ValidationError(err.as_dict(DEFAULT_FIELD_NAME))
 
-        data = self.pre_load(data, context)
-
-        cdef dict result = dict()
         cdef dict errors = None
+        cdef dict result = dict()
         cdef list load_fields = self._load_fields
         cdef int count = len(load_fields)
 
@@ -155,14 +158,17 @@ cdef class BaseContract(abc.Contract):
                 if value is not missing:
                     result[field.name] = value
             except ValidationError as err:
-                if errors:
+                if errors is None:
                     errors = dict()
-                errors[field.name] = err.messages
+                errors.update(err.as_dict(field.name))
 
         if errors:
             raise ValidationError(errors)
 
-        return self.post_load(result, data, context)
+        try:
+            return self.post_load(result, data, context)
+        except ValidationError as err:
+            raise ValidationError(err.as_dict(DEFAULT_FIELD_NAME))
 
     cpdef object pre_dump(self, object data, dict context):
         return data
