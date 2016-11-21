@@ -43,30 +43,6 @@ cdef class Validator(object):
             raise AssertionError(message)
 
 
-cdef class Choice(Validator):
-    """
-    Validator which succeeds if the `value` is a member of the `choices`.
-    :param iterable choices: An array of valid values.
-    :param dict error_messages: The error messages for various kinds of errors.
-    """
-
-    default_error_messages = {
-        'invalid': 'Not a valid choice.'
-    }
-
-    def __init__(self, choices, error_messages=None):
-        super().__init__(error_messages)
-
-        choices = choices or ()
-        assert isinstance(choices, (list, tuple)), '`choices` has to be a list or tuple'
-
-        self.choices = choices
-
-    def __call__(self, value):
-        if value not in self.choices:
-            self._fail('invalid', input=value)
-
-
 cdef class Length(Validator):
     """
     Validator which succeeds if the value passed to it has a length between a minimum and maximum.
@@ -106,6 +82,27 @@ cdef class Length(Validator):
 
         if self.max_length is not None and length > self.max_length:
             self._fail('max_length', max_length=self.max_length)
+
+
+cdef class OneOf(Validator):
+    """
+    Validator which succeeds if the `value` is a member of the `choices`.
+    :param iterable choices: An array of valid values.
+    :param dict error_messages: The error messages for various kinds of errors.
+    """
+
+    default_error_messages = {
+        'invalid': 'Not a valid choice.'
+    }
+
+    def __init__(self, choices, error_messages=None):
+        super().__init__(error_messages)
+
+        self.choices = set(choices)
+
+    def __call__(self, value):
+        if value not in self.choices:
+            self._fail('invalid', input=value)
 
 
 cdef class Range(Validator):

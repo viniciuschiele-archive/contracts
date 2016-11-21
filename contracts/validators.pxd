@@ -10,15 +10,6 @@ cdef class Validator:
     cdef public dict error_messages
 
 
-cdef class Choice(Validator):
-    """
-    Validator which succeeds if the `value` is a member of the `choices`.
-    :param iterable choices: An array of valid values.
-    :param dict error_messages: The error messages for various kinds of errors.
-    """
-    cdef public tuple choices
-
-
 cdef class Length(Validator):
     """
     Validator which succeeds if the value passed to it has a length between a minimum and maximum.
@@ -30,6 +21,15 @@ cdef class Length(Validator):
     cdef public object min_length
     cdef public object max_length
     cdef public object equal_length
+
+
+cdef class OneOf(Validator):
+    """
+    Validator which succeeds if the `value` is a member of the `choices`.
+    :param iterable choices: An array of valid values.
+    :param dict error_messages: The error messages for various kinds of errors.
+    """
+    cdef public set choices
 
 
 cdef class Range(Validator):
