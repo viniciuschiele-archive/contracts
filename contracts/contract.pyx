@@ -118,7 +118,6 @@ cdef class BaseContract(abc.Contract):
 
         return self._post_dump(result, data, context)
 
-    @cython.
     cdef inline object _load_many(self, object data, dict context):
         data = self._pre_load_many(data, context)
 
