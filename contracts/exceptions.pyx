@@ -5,11 +5,17 @@ Handles exceptions raised by Contracts.
 
 cdef class ValidationError(Exception):
     def __init__(self, message, **kwargs):
-        if isinstance(message, dict):
+        if isinstance(message, ValidationError):
+            self.message = message.message
+            self.extra = message.extra
+
+        elif isinstance(message, dict):
             messages = {}
 
             for field, message in message.items():
-                if not isinstance(message, ValidationError):
+                if isinstance(message, ValidationError):
+                    messages[field] = message
+                else:
                     messages[field] = ValidationError(message)
 
             self.message = messages
@@ -32,7 +38,7 @@ cdef class ValidationError(Exception):
             self.extra = kwargs
 
         else:
-            raise Exception('Expected str, list or dict')
+            raise Exception('Expected str, list, dict or ValidationError')
 
     cpdef dict as_dict(self, str default_field_name):
         if isinstance(self.message, dict):

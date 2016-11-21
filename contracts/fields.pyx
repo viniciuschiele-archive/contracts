@@ -81,6 +81,7 @@ cdef class Field(abc.Field):
         if value is None:
             if self.allow_none:
                 return None
+
             self._fail('null')
 
         if value is missing:
@@ -124,17 +125,17 @@ cdef class Field(abc.Field):
             raise AssertionError(message)
 
     cpdef _validate(self, object value):
-        errors = []
+        cdef list errors = None
 
         for validator in self.validators:
             try:
                 if validator(value) is False:
                     self._fail('validator_failed')
-            except ValidationError as err:
-                if isinstance(err.messages, dict):
-                    errors.append(err.messages)
+            except ValidationError as e:
+                if errors is None:
+                    errors = [e]
                 else:
-                    errors.extend(err.messages)
+                    errors.append(e)
 
         if errors:
             raise ValidationError(errors)
@@ -315,14 +316,17 @@ cdef class List(Field):
         if not self.allow_empty and len(value) == 0:
             self._fail('empty')
 
-        result = []
-        errors = {}
+        cdef list result = []
+        cdef dict errors = None
 
         for idx, item in enumerate(value):
             try:
                 result.append(self.child.load(item))
             except ValidationError as e:
-                errors.update({idx: e.messages})
+                if errors is None:
+                    errors = {idx: e}
+                else:
+                    errors.update({idx: e})
 
         if errors:
             raise ValidationError(errors)
