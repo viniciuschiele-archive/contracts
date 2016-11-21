@@ -18,8 +18,8 @@ MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key
 
 cdef class Field(abc.Field):
     default_error_messages = {
-        'required': 'This field is required.',
         'null': 'This field may not be null.',
+        'required': 'This field is required.',
         'validator_failed': 'Invalid value.'
     }
 
@@ -44,16 +44,11 @@ cdef class Field(abc.Field):
         else:
             self.allow_none = allow_none
 
-        # Collect default error message from self and parent classes
-        messages = {}
-        for cls in reversed(self.__class__.__mro__):
-            messages.update(getattr(cls, 'default_error_messages', {}))
-        messages.update(error_messages or {})
-        self.error_messages = messages
-
         self.name = None
         self.parent = None
         self._decorator_validators = []
+
+        self._prepare_error_messages(error_messages)
 
     cpdef bind(self, str name, abc.Contract parent):
         self.name = name
@@ -97,6 +92,17 @@ cdef class Field(abc.Field):
     cpdef validator(self, func):
         self._decorator_validators.append(func.__name__)
         return func
+
+    cdef _prepare_error_messages(self, dict error_messages):
+        cdef dict messages = {}
+
+        for cls in reversed(self.__class__.__mro__):
+            messages.update(getattr(cls, 'default_error_messages', {}))
+
+        if error_messages:
+            messages.update(error_messages)
+
+        self.error_messages = messages
 
     cpdef _get_default(self):
         if self.default_ is missing:
@@ -146,18 +152,26 @@ cdef class Boolean(Field):
         'invalid': '"{value}" is not a valid boolean.'
     }
 
-    TRUE_VALUES = {'t', 'T', 'true', 'True', 'TRUE', '1', 1, True}
-    FALSE_VALUES = {'f', 'F', 'false', 'False', 'FALSE', '0', 0, 0.0, False}
+    default_options = {
+        'true_values': {'t', 'T', 'true', 'True', 'TRUE', '1', 1, True},
+        'false_values': {'f', 'F', 'false', 'False', 'FALSE', '0', 0, 0.0, False}
+    }
+
+    def __init__(self, **kwargs):
+        super(Boolean, self).__init__(**kwargs)
+
+        self._true_values = self.default_options.get('true_values')
+        self._false_values = self.default_options.get('false_values')
 
     cpdef object _load(self, object value):
         if isinstance(value, bool):
             return value
 
         try:
-            if value in self.TRUE_VALUES:
+            if value in self._true_values:
                 return True
 
-            if value in self.FALSE_VALUES:
+            if value in self._false_values:
                 return False
         except TypeError:
             pass
@@ -168,10 +182,10 @@ cdef class Boolean(Field):
         if isinstance(value, bool):
             return value
 
-        if value in self.TRUE_VALUES:
+        if value in self._true_values:
             return True
 
-        if value in self.FALSE_VALUES:
+        if value in self._false_valus:
             return False
 
         return bool(value)
@@ -179,7 +193,7 @@ cdef class Boolean(Field):
 
 cdef class Date(Field):
     default_error_messages = {
-        'invalid': 'Date has wrong format.',
+        'invalid': 'Date has wrong format.'
     }
 
     cpdef object _load(self, object value):
@@ -393,10 +407,24 @@ cdef class String(Field):
         'min_length': 'Shorter than minimum length {min_length}.'
     }
 
-    def __init__(self, bint allow_blank=False, bint trim_whitespace=False, min_length=None, max_length=None, **kwargs):
+    default_options = {
+        'allow_blank': False,
+        'trim_whitespace': False
+    }
+
+    def __init__(self, allow_blank=None, trim_whitespace=None, min_length=None, max_length=None, **kwargs):
         super().__init__(**kwargs)
-        self.allow_blank = allow_blank
-        self.trim_whitespace = trim_whitespace
+
+        if allow_blank is None:
+            self.allow_blank = self.default_options.get('allow_blank')
+        else:
+            self.allow_blank = allow_blank
+
+        if trim_whitespace is None:
+            self.trim_whitespace = self.default_options.get('trim_whitespace')
+        else:
+            self.trim_whitespace = trim_whitespace
+
         self.min_length = min_length
         self.max_length = max_length
 

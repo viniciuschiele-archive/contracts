@@ -17,6 +17,7 @@ cdef class Field(abc.Field):
 
     cpdef validator(self, func)
 
+    cdef _prepare_error_messages(self, dict error_messages)
     cpdef object _get_default(self)
     cpdef object _dump(self, object value)
     cpdef object _load(self, object value)
@@ -24,7 +25,8 @@ cdef class Field(abc.Field):
 
 
 cdef class Boolean(Field):
-    pass
+    cdef public set _true_values
+    cdef public set _false_values
 
 
 cdef class Date(Field):
