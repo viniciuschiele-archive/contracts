@@ -85,18 +85,18 @@ cdef class BaseContract(abc.Contract):
         return getattr(data, field_name, missing)
 
     cdef inline object _dump_many(self, object data, dict context):
-        data = self.pre_dump_many(data, context)
+        data = self._pre_dump_many(data, context)
 
         cdef list items = []
 
         for item in data:
             items.append(self._dump_single(item, context))
 
-        return self.post_dump_many(items, data, context)
+        return self._post_dump_many(items, data, context)
 
     @cython.boundscheck(False)
     cdef inline object _dump_single(self, object data, dict context):
-        data = self.pre_dump(data, context)
+        data = self._pre_dump(data, context)
 
         cdef dict result = dict()
         cdef list dump_fields = self._dump_fields
@@ -116,22 +116,23 @@ cdef class BaseContract(abc.Contract):
             if value is not missing:
                 result[field.dump_to] = value
 
-        return self.post_dump(result, data, context)
+        return self._post_dump(result, data, context)
 
+    @cython.
     cdef inline object _load_many(self, object data, dict context):
-        data = self.pre_load_many(data, context)
+        data = self._pre_load_many(data, context)
 
         cdef list items = []
 
         for item in data:
             items.append(self._load_single(item, context))
 
-        return self.post_load_many(items, data, context)
+        return self._post_load_many(items, data, context)
 
     @cython.boundscheck(False)
     cdef inline object _load_single(self, object data, dict context):
         try:
-            data = self.pre_load(data, context)
+            data = self._pre_load(data, context)
         except ValidationError as err:
             raise ValidationError(err.as_dict(DEFAULT_FIELD_NAME))
 
@@ -166,32 +167,32 @@ cdef class BaseContract(abc.Contract):
             raise ValidationError(errors)
 
         try:
-            return self.post_load(result, data, context)
+            return self._post_load(result, data, context)
         except ValidationError as err:
             raise ValidationError(err.as_dict(DEFAULT_FIELD_NAME))
 
-    cpdef object pre_dump(self, object data, dict context):
+    cpdef object _pre_dump(self, object data, dict context):
         return data
 
-    cpdef object pre_dump_many(self, list data, dict context):
+    cpdef object _pre_dump_many(self, list data, dict context):
         return data
 
-    cpdef object pre_load(self, object data, dict context):
+    cpdef object _pre_load(self, object data, dict context):
         return data
 
-    cpdef object pre_load_many(self, list data, dict context):
+    cpdef object _pre_load_many(self, list data, dict context):
         return data
 
-    cpdef object post_dump(self, object data, object original_data, dict context):
+    cpdef object _post_dump(self, object data, object original_data, dict context):
         return data
 
-    cpdef object post_dump_many(self, list data, object original_data, dict context):
+    cpdef object _post_dump_many(self, list data, object original_data, dict context):
         return data
 
-    cpdef object post_load(self, object data, object original_data, dict context):
+    cpdef object _post_load(self, object data, object original_data, dict context):
         return data
 
-    cpdef object post_load_many(self, list data, object original_data, dict context):
+    cpdef object _post_load_many(self, list data, object original_data, dict context):
         return data
 
 

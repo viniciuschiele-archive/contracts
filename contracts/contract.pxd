@@ -9,15 +9,15 @@ cdef class BaseContract(abc.Contract):
     cdef list _load_fields
     cdef list _dump_fields
 
-    cpdef object pre_dump(self, object data, dict context)
-    cpdef object pre_dump_many(self, list data, dict context)
-    cpdef object post_dump(self, object data, object original_data, dict context)
-    cpdef object post_dump_many(self, list data, object original_data, dict context)
+    cpdef object _pre_dump(self, object data, dict context)
+    cpdef object _pre_dump_many(self, list data, dict context)
+    cpdef object _post_dump(self, object data, object original_data, dict context)
+    cpdef object _post_dump_many(self, list data, object original_data, dict context)
 
-    cpdef object pre_load(self, object data, dict context)
-    cpdef object pre_load_many(self, list data, dict context)
-    cpdef object post_load(self, object data, object original_data, dict context)
-    cpdef object post_load_many(self, list data, object original_data, dict context)
+    cpdef object _pre_load(self, object data, dict context)
+    cpdef object _pre_load_many(self, list data, dict context)
+    cpdef object _post_load(self, object data, object original_data, dict context)
+    cpdef object _post_load_many(self, list data, object original_data, dict context)
 
     cpdef _prepare_fields(self)
     cpdef _prepare_nested_fields(self, str option_name, set field_names)
