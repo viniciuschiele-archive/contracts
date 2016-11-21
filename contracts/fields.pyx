@@ -206,7 +206,7 @@ cdef class Date(Field):
         try:
             parsed = ciso8601.parse_datetime_unaware(value)
             if parsed is not None:
-                return parsed
+                return parsed.date()
         except (ValueError, TypeError):
             pass
 
