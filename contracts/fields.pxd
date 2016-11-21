@@ -55,6 +55,8 @@ cdef class List(Field):
 cdef class Method(Field):
     cdef public str dump_method_name
     cdef public str load_method_name
+    cdef public object _dump_method
+    cdef public object _load_method
 
 
 cdef class Nested(Field):

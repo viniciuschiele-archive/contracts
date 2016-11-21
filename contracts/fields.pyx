@@ -361,21 +361,26 @@ cdef class Method(Field):
         self.dump_method_name = dump_method_name
         self.load_method_name = load_method_name
 
+        self._dump_method = None
+        self._load_method = None
+
+    cpdef bind(self, str name, abc.Contract parent):
+        super(Method, self).bind(name, parent)
+
+        self._dump_method = getattr(self.parent, self.dump_method_name)
+        self._load_method = getattr(self.parent, self.load_method_name)
+
     cpdef object _dump(self, object value):
-        if not self.dump_method_name:
+        if not self._dump_method:
             return missing
 
-        method = getattr(self.parent, self.dump_method_name)
-
-        return method(value)
+        return self._dump_method(value)
 
     cpdef object _load(self, object value):
-        if not self.load_method_name:
+        if not self._load_method:
             return missing
 
-        method = getattr(self.parent, self.load_method_name)
-
-        return method(value)
+        return self._load_method(value)
 
 
 cdef class Nested(Field):
