@@ -19,6 +19,7 @@ extensions = [
     Extension('contracts.contract', ['contracts/contract'+ext]),
     Extension('contracts.exceptions', ['contracts/exceptions'+ext]),
     Extension('contracts.fields', ['contracts/fields'+ext]),
+    Extension('contracts.timezone', ['contracts/timezone'+ext]),
     Extension('contracts.validators', ['contracts/validators'+ext]),
     Extension('contracts.utils', ['contracts/utils'+ext]),
 ]
