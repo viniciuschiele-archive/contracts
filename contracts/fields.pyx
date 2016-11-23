@@ -4,10 +4,11 @@ Provides a set of classes to serialize Python objects.
 
 cimport cython
 import ciso8601
-import datetime
 import uuid
 
+from cpython.datetime cimport datetime, date
 from . cimport abc
+from . cimport timezone
 from . cimport validators
 from .exceptions cimport ValidationError
 from .utils cimport missing
@@ -197,10 +198,10 @@ cdef class Date(Field):
     }
 
     cpdef object _load(self, object value):
-        if isinstance(value, datetime.datetime):
+        if isinstance(value, datetime):
             return value.date()
 
-        if isinstance(value, datetime.date):
+        if isinstance(value, date):
             return value
 
         try:
@@ -213,7 +214,7 @@ cdef class Date(Field):
         self._fail('invalid')
 
     cpdef object _dump(self, object value):
-        if isinstance(value, datetime.datetime):
+        if isinstance(value, datetime):
             return value.date().isoformat()
 
         return value.isoformat()
@@ -225,18 +226,30 @@ cdef class DateTime(Field):
         'date': 'Expected a datetime but got a date.',
     }
 
-    cpdef object _load(self, object value):
-        if isinstance(value, datetime.datetime):
-            return value
+    default_options = {
+        'default_timezone': None
+    }
 
-        if isinstance(value, datetime.date):
+    def __init__(self, default_timezone=None, **kwargs):
+        super(DateTime, self).__init__(**kwargs)
+
+        if default_timezone is None:
+            self.default_timezone = self.default_options.get('default_timezone')
+        else:
+            self.default_timezone = default_timezone
+
+    cpdef object _load(self, object value):
+        if isinstance(value, datetime):
+            return self._enforce_timezone(value)
+
+        if isinstance(value, date):
             self._fail('date')
 
         try:
 
-            parsed = ciso8601.parse_datetime(value)
+            parsed = ciso8601.parse_datetime(str(value))
             if parsed is not None:
-                return parsed
+                return self._enforce_timezone(parsed)
         except (ValueError, TypeError):
             pass
 
@@ -245,6 +258,12 @@ cdef class DateTime(Field):
     cpdef object _dump(self, object value):
         return value.isoformat()
 
+    cpdef _enforce_timezone(self, datetime value):
+        if self.default_timezone is not None and not timezone.is_aware(value):
+            return timezone.make_aware(value, self.default_timezone)
+        elif self.default_timezone is None and timezone.is_aware(value):
+            return timezone.make_naive(value, timezone.utc)
+        return value
 
 cdef class Float(Field):
     default_error_messages = {

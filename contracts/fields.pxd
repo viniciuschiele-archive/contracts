@@ -1,4 +1,5 @@
 from . cimport abc
+from cpython.datetime cimport datetime
 
 
 cdef class Field(abc.Field):
@@ -34,7 +35,9 @@ cdef class Date(Field):
 
 
 cdef class DateTime(Field):
-    pass
+    cdef public object default_timezone
+
+    cpdef _enforce_timezone(self, datetime value)
 
 
 cdef class Float(Field):
