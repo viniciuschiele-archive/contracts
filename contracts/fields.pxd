@@ -46,8 +46,8 @@ cdef class Float(Field):
 
 
 cdef class Function(Field):
-    cdef public object dump_method
-    cdef public object load_method
+    cdef public object dump_func
+    cdef public object load_func
 
 
 cdef class Integer(Field):
@@ -83,4 +83,4 @@ cdef class String(Field):
 
 
 cdef class UUID(Field):
-    pass
+    cdef public str dump_format

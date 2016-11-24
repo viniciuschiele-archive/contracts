@@ -38,7 +38,7 @@ cdef class ValidationError(Exception):
             self.extra = kwargs
 
         else:
-            raise Exception('Expected str, list, dict or ValidationError')
+            raise Exception('Expected str, list, dict or ValidationError but got ' + str(type(message)))
 
     cpdef dict as_dict(self, str default_field_name):
         if isinstance(self.message, dict):

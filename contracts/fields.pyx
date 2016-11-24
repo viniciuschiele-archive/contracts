@@ -67,7 +67,7 @@ cdef class Field(abc.Field):
 
     cpdef object dump(self, object value):
         if value is missing:
-            return self._get_default()
+            return missing
 
         if value is None:
             return None
@@ -262,8 +262,10 @@ cdef class DateTime(Field):
     cpdef _enforce_timezone(self, datetime value):
         if self.default_timezone is not None and not timezone.is_aware(value):
             return timezone.make_aware(value, self.default_timezone)
+
         elif self.default_timezone is None and timezone.is_aware(value):
             return timezone.make_naive(value, timezone.utc)
+
         return value
 
 
@@ -306,16 +308,16 @@ cdef class Function(Field):
         self.load_func = load_func
 
     cpdef object _dump(self, object value):
-        if not self.dump_method:
+        if not self.dump_func:
             return missing
 
-        return self.dump_method(value)
+        return self.dump_func(value)
 
     cpdef object _load(self, object value):
-        if not self.load_method:
+        if not self.load_func:
             return missing
 
-        return self.load_method(value)
+        return self.load_func(value)
 
 
 cdef class Integer(Field):
@@ -365,7 +367,7 @@ cdef class List(Field):
         """
         List of dicts of native values <- List of dicts of primitive datatypes.
         """
-        if not isinstance(value, list):
+        if not isinstance(value, (tuple, list, set)):
             self._fail('invalid')
 
         if not self.allow_empty and len(value) == 0:
@@ -408,8 +410,17 @@ cdef class Method(Field):
     cpdef bind(self, str name, abc.Contract parent):
         super(Method, self).bind(name, parent)
 
-        self._dump_method = getattr(self.parent, self.dump_method_name)
-        self._load_method = getattr(self.parent, self.load_method_name)
+        if self.dump_method_name:
+            dump_method = getattr(self.parent, self.dump_method_name, None)
+            if not callable(dump_method):
+                raise ValueError('Object {0!r} is not callable.'.format(dump_method))
+            self._dump_method = dump_method
+
+        if self.load_method_name:
+            load_method = getattr(self.parent, self.load_method_name, None)
+            if not callable(load_method):
+                raise ValueError('Object {0!r} is not callable.'.format(load_method))
+            self._load_method = load_method
 
     cpdef object _dump(self, object value):
         if not self._dump_method:
@@ -503,6 +514,26 @@ cdef class UUID(Field):
         'invalid': '"{value}" is not a valid UUID.',
     }
 
+    default_options = {
+        'dump_format': 'hex_verbose'
+    }
+
+    valid_formats = ('hex_verbose', 'hex', 'int')
+
+    def __init__(self, str dump_format=None, **kwargs):
+        super().__init__(**kwargs)
+
+        if dump_format is None:
+            dump_format = self.default_options.get('dump_format')
+
+        if dump_format not in self.valid_formats:
+           raise ValueError(
+                'Invalid format for uuid representation. '
+                'Must be one of "{0}"'.format('", "'.join(self.valid_formats))
+            )
+
+        self.dump_format = dump_format
+
     cpdef object _load(self, object value):
         if isinstance(value, uuid.UUID):
             return value
@@ -514,5 +545,17 @@ cdef class UUID(Field):
 
     @cython.boundscheck(False)
     cpdef object _dump(self, object value):
-        cdef str hex = '%032x' % value.int
-        return hex[:8] + '-' + hex[8:12] + '-' + hex[12:16] + '-' + hex[16:20] + '-' + hex[20:]
+        cdef str hex
+        cdef str dump_format = self.dump_format
+
+        if dump_format == 'hex_verbose':
+            hex = '%032x' % value.int
+            return hex[:8] + '-' + hex[8:12] + '-' + hex[12:16] + '-' + hex[16:20] + '-' + hex[20:]
+
+        if dump_format == 'hex':
+            return '%032x' % value.int
+
+        if dump_format == 'int':
+            return value.int
+
+        return str(value)
