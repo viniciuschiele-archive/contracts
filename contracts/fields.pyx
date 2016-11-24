@@ -7,6 +7,7 @@ import ciso8601
 import uuid
 
 from cpython.datetime cimport datetime, date
+from . import timezone
 from . cimport abc
 from . cimport timezone
 from . cimport validators
@@ -247,7 +248,7 @@ cdef class DateTime(Field):
 
         try:
 
-            parsed = ciso8601.parse_datetime(str(value))
+            parsed = ciso8601.parse_datetime(value)
             if parsed is not None:
                 return self._enforce_timezone(parsed)
         except (ValueError, TypeError):
@@ -264,6 +265,7 @@ cdef class DateTime(Field):
         elif self.default_timezone is None and timezone.is_aware(value):
             return timezone.make_naive(value, timezone.utc)
         return value
+
 
 cdef class Float(Field):
     default_error_messages = {

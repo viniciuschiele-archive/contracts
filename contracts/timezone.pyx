@@ -29,6 +29,7 @@ cdef class UTC(tzinfo):
         return dt.replace(tzinfo=self)
 
 
+# singleton instance
 utc = UTC()
 
 
