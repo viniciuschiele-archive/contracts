@@ -1,113 +1,157 @@
-import datetime
-
 from contracts import fields, timezone
 from contracts.exceptions import ValidationError
+from datetime import datetime, date
 from unittest import TestCase
 
 
-class FieldValues(object):
+class TestBoolean(TestCase):
     """
-    Base class for testing valid and invalid input values.
+    Valid and invalid values for `Boolean`.
     """
-
-    def get_items(self, mapping_or_list_of_two_tuples):
-        # Tests accept either lists of two tuples, or dictionaries.
-        if isinstance(mapping_or_list_of_two_tuples, dict):
-            # {value: expected}
-            return mapping_or_list_of_two_tuples.items()
-        # [(value, expected), ...]
-        return mapping_or_list_of_two_tuples
 
     def test_valid_inputs(self):
-        """
-        Ensure that valid values return the expected validated data.
-        """
-        for input_value, expected_output in self.get_items(self.valid_inputs):
-            self.assertEqual(self.field.load(input_value), expected_output)
+        field = fields.Boolean()
+
+        for value in ('True', 'true', 'TRUE', '1', 1, True):
+            self.assertEqual(field.load(value), True)
+
+        for value in ('False', 'false', 'FALSE', '0', 0, False):
+            self.assertEqual(field.load(value), False)
 
     def test_invalid_inputs(self):
-        """
-        Ensure that invalid values raise the expected validation error.
-        """
-        for input_value, expected_failure in self.get_items(self.invalid_inputs):
-            with self.assertRaises(ValidationError) as exc_info:
-                self.field.load(input_value)
-            self.assertEqual(exc_info.exception.message, expected_failure)
+        self.assertRaises(ValidationError, fields.Boolean().load, 'foo')
+        self.assertRaises(ValidationError, fields.Boolean().load, [])
 
-    def test_outputs(self):
-        for output_value, expected_output in self.get_items(self.outputs):
-            self.assertEqual(self.field.dump(output_value), expected_output)
+    def test_valid_outputs(self):
+        field = fields.Boolean()
 
+        for value in ('True', 'true', 'TRUE', '1', 'other', 1, True):
+            self.assertEqual(field.dump(value), True)
 
-class TestBoolean(TestCase, FieldValues):
-    """
-    Valid and invalid values for `BooleanField`.
-    """
+        for value in ('False', 'false', 'FALSE', '0', 0, False):
+            self.assertEqual(field.dump(value), False)
 
-    valid_inputs = {
-        'True': True, 'true': True, 'TRUE': True,
-        'False': False, 'false': False, 'FALSE': False,
-        't': True, 'T': True,
-        'f': False, 'F': False,
-        '1': True, '0': False,
-        1: True, 0: False,
-        True: True, False: False,
-    }
-    invalid_inputs = {
-        'foo': '"foo" is not a valid boolean.',
-    }
-    outputs = {
-        'True': True, 'true': True, 'TRUE': True,
-        'False': False, 'false': False, 'FALSE': False,
-        't': True, 'T': True,
-        'f': False, 'F': False,
-        '1': True, '0': False,
-        1: True, 0: False,
-        True: True, False: False,
-        'other': True,
-    }
-    field = fields.Boolean()
+    def test_invalid_outputs(self):
+        field = fields.Boolean()
+        self.assertRaises(TypeError, field.dump, [])
+        self.assertRaises(TypeError, field.dump, {})
 
 
-class TestDate(TestCase, FieldValues):
+class TestDate(TestCase):
     """
     Valid and invalid values for `Date`.
     """
-    valid_inputs = {
-        '2001-01-20': datetime.date(2001, 1, 20),
-        '20010120': datetime.date(2001, 1, 20),
-        datetime.date(2001, 1, 20): datetime.date(2001, 1, 20),
-        datetime.datetime(2001, 1, 20, 12, 00): datetime.date(2001, 1, 20)
-    }
-    invalid_inputs = {
-        'abc': 'Date has wrong format.',
-        '2001-99-99': 'Date has wrong format.',
-    }
-    outputs = {
-        datetime.date(2001, 1, 20): '2001-01-20',
-        datetime.datetime(2001, 1, 20, 12, 00): '2001-01-20',
-    }
-    field = fields.Date()
+    def test_valid_inputs(self):
+        field = fields.Date()
+        self.assertEqual(field.load('2001-01'), date(2001, 1, 1))
+        self.assertEqual(field.load('2001-01-20'), date(2001, 1, 20))
+        self.assertEqual(field.load('20010120'), date(2001, 1, 20))
+        self.assertEqual(field.load('2001-01-20T01:00:00'), date(2001, 1, 20))
+        self.assertEqual(field.load(date(2001, 1, 20)), date(2001, 1, 20))
+        self.assertEqual(field.load(datetime(2001, 1, 20, 12, 00)), date(2001, 1, 20))
+
+    def test_invalid_inputs(self):
+        field = fields.Date()
+        self.assertRaises(ValidationError, field.load, '')
+        self.assertRaises(ValidationError, field.load, 'abc')
+        self.assertRaises(ValidationError, field.load, '2001-13-01')
+        self.assertRaises(ValidationError, field.load, '2001-01-32')
+        self.assertRaises(ValidationError, field.load, 20010120)
+
+    def test_valid_outputs(self):
+        field = fields.Date()
+        self.assertEqual(field.dump(date(2001, 1, 20)), '2001-01-20')
+        self.assertEqual(field.dump(datetime(2001, 1, 20, 12, 00)), '2001-01-20')
+
+    def test_invalid_outputs(self):
+        field = fields.Date()
+        self.assertRaises(AttributeError, field.dump, '2001-01-20')
+        self.assertRaises(AttributeError, field.dump, 'abc')
 
 
-class TestDateTime(TestCase, FieldValues):
+class TestDateTime(TestCase):
     """
-    Valid and invalid values for `DateTimeField`.
+    Valid and invalid values for `DateTime`.
     """
-    valid_inputs = {
-        '2001-01-01 13:00': datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc),
-        '2001-01-01T13:00': datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc),
-        '2001-01-01T13:00Z': datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc),
-        datetime.datetime(2001, 1, 1, 13, 00): datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc),
-        datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc): datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc),
-    }
-    invalid_inputs = {
-        'abc': 'Datetime has wrong format.',
-        '2001-99-99T99:00': 'Datetime has wrong format.',
-        datetime.date(2001, 1, 1): 'Expected a datetime but got a date.',
-    }
-    outputs = {
-        datetime.datetime(2001, 1, 1, 13, 00): '2001-01-01T13:00:00',
-        datetime.datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc): '2001-01-01T13:00:00+00:00',
-    }
-    field = fields.DateTime(default_timezone=timezone.utc)
+
+    def test_valid_inputs(self):
+        field = fields.DateTime()
+        self.assertEqual(field.load('2001-01-01'), datetime(2001, 1, 1))
+        self.assertEqual(field.load('2001-01-01 13:00'), datetime(2001, 1, 1, 13, 00))
+        self.assertEqual(field.load('2001-01-01T13:00:01'), datetime(2001, 1, 1, 13, 0, 1))
+        self.assertEqual(field.load('2001-01-01T13:00:01.001'), datetime(2001, 1, 1, 13, 0, 1, 1000))
+        self.assertEqual(field.load('2001-01-01T13:00Z'), datetime(2001, 1, 1, 13, 00))
+        self.assertEqual(field.load('2001-01-01T13:00+00:00'), datetime(2001, 1, 1, 13, 00))
+        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00)), datetime(2001, 1, 1, 13, 00))
+        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc)), datetime(2001, 1, 1, 13, 00))
+
+    def test_valid_inputs_with_default_timezone(self):
+        field = fields.DateTime(default_timezone=timezone.utc)
+        self.assertEqual(field.load('2001-01-01'), datetime(2001, 1, 1, tzinfo=timezone.utc))
+        self.assertEqual(field.load('2001-01-01 13:00'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self.assertEqual(field.load('2001-01-01T13:00'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self.assertEqual(field.load('2001-01-01T13:00Z'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self.assertEqual(field.load('2001-01-01T13:00+00:00'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00)), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc)), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+
+    def test_invalid_inputs(self):
+        field = fields.DateTime()
+        self.assertRaises(ValidationError, field.load, '')
+        self.assertRaises(ValidationError, field.load, 'abc')
+        self.assertRaises(ValidationError, field.load, '2001-13-01')
+        self.assertRaises(ValidationError, field.load, '2001-01-32')
+        # self.assertRaises(ValidationError, field.load, '2001-01-01T99:00')
+        self.assertRaises(ValidationError, field.load, 20010120)
+        self.assertRaises(ValidationError, field.load, date(2001, 1, 1))
+
+    def test_valid_outputs(self):
+        field = fields.DateTime()
+        self.assertEqual(field.dump(datetime(2001, 1, 1, 13, 00)), '2001-01-01T13:00:00')
+        self.assertEqual(field.dump(datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc)), '2001-01-01T13:00:00+00:00')
+
+    def test_invalid_outputs(self):
+        field = fields.DateTime()
+        self.assertRaises(AttributeError, field.dump, '2001-01-01T13:00:00')
+        self.assertRaises(AttributeError, field.dump, 123)
+
+
+class TestFloat(TestCase):
+    """
+    Valid and invalid values for `Float`.
+    """
+    def test_valid_inputs(self):
+        field = fields.Float()
+        self.assertEqual(field.load('1'), 1.0)
+        self.assertEqual(field.load('0'), 0.0)
+        self.assertEqual(field.load(1), 1.0)
+        self.assertEqual(field.load(0), 0.0)
+        self.assertEqual(field.load(1.0), 1.0)
+        self.assertEqual(field.load(0.0), 0.0)
+
+    def test_invalid_inputs(self):
+        field = fields.Date()
+        self.assertRaises(ValidationError, field.load, 'abc')
+
+    def test_valid_inputs_with_min_max_value(self):
+        field = fields.Float(min_value=1, max_value=3)
+        self.assertEqual(field.load(1.0), 1.0)
+        self.assertEqual(field.load(3.0), 3.0)
+
+    def test_invalid_inputs_with_min_max_value(self):
+        field = fields.Float(min_value=1, max_value=3)
+        self.assertRaises(ValidationError, field.load, 0.9)
+        self.assertRaises(ValidationError, field.load, 3.1)
+
+    def test_valid_outputs(self):
+        field = fields.Float()
+        self.assertEqual(field.dump('1'), 1.0)
+        self.assertEqual(field.dump('0'), 0.0)
+        self.assertEqual(field.dump(1), 1.0)
+        self.assertEqual(field.dump(0), 0.0)
+        self.assertEqual(field.dump(1), 1.0)
+        self.assertEqual(field.dump(0), 0.0)
+
+    def test_invalid_outputs(self):
+        field = fields.Float()
+        self.assertRaises(ValueError, field.dump, 'abc')
