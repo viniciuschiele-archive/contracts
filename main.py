@@ -29,16 +29,16 @@ class MyContract(Contract):
     property8 = fields.Float()
     property9 = fields.Nested(NestedContract)
 
-    # def post_load(self, data, original_data):
+    # def _post_load(self, data, original_data):
     #     return MyData(**data)
     #
-    # def post_dump(self, data, original_data):
+    # def _post_dump(self, data, original_data, context):
     #     return data
 
 
 class NestedSchema(Schema):
-    property1 = fields.String()
-    property2 = fields.String()
+    property1 = mmfields.String()
+    property2 = mmfields.String()
 
 
 class MySchema(Schema):
@@ -53,11 +53,11 @@ class MySchema(Schema):
     property9 = mmfields.Nested(NestedSchema)
 
     # @post_load
-    # def post_load(self, data):
+    # def _post_load(self, data):
     #     return MyData(**data)
     #
     # @post_dump
-    # def post_dump(self, data):
+    # def _post_dump(self, data):
     #     return data
 
 # class MyData:
@@ -81,9 +81,6 @@ class MySchema(Schema):
 #         self.__dict__ = kwargs
 
 
-contract = MyContract(many=None, exclude={'property9.property1'})
-schema = MySchema(exclude=('property9.property1',))
-
 data = dict(
     property1=True,
     property2=datetime.now().date(),
@@ -96,33 +93,58 @@ data = dict(
     property9=dict(property1='123', property2='456')
 )
 
+# contract = MyContract(exclude={'property9.property1'})
+# print(contract.dump(data))
+#
+# contract2 = MyContract()
+# print(contract.dump(data) == contract2.dump(data))
+
+
+def perf(func1, func2, count):
+    start = datetime.now()
+    for _ in range(count):
+        func1()
+    elapsed1 = datetime.now() - start
+    print(elapsed1)
+
+    start = datetime.now()
+    for _ in range(count):
+        func2()
+    elapsed2 = datetime.now() - start
+    print(elapsed2)
+
+    print(elapsed2.total_seconds() / elapsed1.total_seconds())
+
+
+print('init')
+perf(lambda: MyContract(), lambda: MySchema(), 1000)
+
+print()
 
 print('dump')
-start = datetime.now()
-for _ in range(0, 1000):
-    contract.dump(data)
-contract_elapsed = datetime.now()-start
-print(contract_elapsed)
-
-start = datetime.now()
-for _ in range(0, 1000):
-    schema.dump(data)
-schema_elapsed = datetime.now()-start
-print(schema_elapsed)
-print(schema_elapsed.total_seconds() / contract_elapsed.total_seconds())
+contract = MyContract()
+schema = MySchema()
+perf(lambda: contract.dump(data), lambda: schema.dump(data), 1000)
 
 print()
 
 print('load')
-start = datetime.now()
-for _ in range(0, 1000):
-    contract.load(data)
-contract_elapsed = datetime.now()-start
-print(contract_elapsed)
+contract = MyContract()
+schema = MySchema()
+perf(lambda: contract.load(data), lambda: schema.dump(data), 1000)
+print()
 
-start = datetime.now()
-for _ in range(0, 1000):
-    schema.load(data)
-schema_elapsed = datetime.now()-start
-print(schema_elapsed)
-print(schema_elapsed.total_seconds() / contract_elapsed.total_seconds())
+
+print('dump many')
+lst = [data for _ in range(0, 1000)]
+contract = MyContract(many=True)
+schema = MySchema(many=True)
+perf(lambda: contract.dump(lst), lambda: schema.dump(lst), 1)
+
+print()
+
+print('load many')
+lst = [data for _ in range(0, 1000)]
+contract = MyContract(many=True)
+schema = MySchema(many=True)
+perf(lambda: contract.load(lst), lambda: schema.load(lst), 1)
