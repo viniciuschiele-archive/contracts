@@ -7,7 +7,7 @@ cdef class Field(abc.Field):
     cdef public abc.Contract parent
     cdef public bint dump_only
     cdef public bint load_only
-    cdef public object default_
+    cdef public object default_value
     cdef public bint allow_none
     cdef public str dump_to
     cdef public str load_from

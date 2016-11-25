@@ -14,9 +14,6 @@ from . cimport validators
 from .exceptions cimport ValidationError
 from .utils cimport missing
 
-MISSING_ERROR_MESSAGE = 'ValidationError raised by `{class_name}`, but error key `{key}` does ' \
-                        'not exist in the `error_messages` dictionary.'
-
 
 cdef class Field(abc.Field):
     default_error_messages = {
@@ -29,7 +26,7 @@ cdef class Field(abc.Field):
                  str dump_to=None, str load_from=None, dict error_messages=None, list validators=None):
         self.dump_only = dump_only
         self.load_only = load_only
-        self.default_ = default
+        self.default_value = default
         self.allow_none = allow_none
         self.dump_to = dump_to
         self.load_from = load_from
@@ -107,13 +104,13 @@ cdef class Field(abc.Field):
         self.error_messages = messages
 
     cpdef _get_default(self):
-        if self.default_ is missing:
+        if self.default_value is missing:
             return missing
 
-        if callable(self.default_):
-            return self.default_()
+        if callable(self.default_value):
+            return self.default_value()
 
-        return self.default_
+        return self.default_value
 
     cpdef object _dump(self, object value):
         return value
@@ -124,13 +121,15 @@ cdef class Field(abc.Field):
     def _fail(self, key, **kwargs):
         try:
             message = self.error_messages[key]
-            if kwargs:
+            if isinstance(message, str):
                 message = message.format(**kwargs)
+
             raise ValidationError(message)
         except KeyError:
-            class_name = self.__class__.__name__
-            message = MISSING_ERROR_MESSAGE.format(class_name=class_name, key=key)
-            raise AssertionError(message)
+            raise AssertionError(
+                'ValidationError raised by `{class_name}`, but error key `{key}` does '
+                'not exist in the `error_messages` dictionary.'.format(
+                    class_name=self.__class__.__name__, key=key))
 
     cpdef _validate(self, object value):
         cdef list errors = None

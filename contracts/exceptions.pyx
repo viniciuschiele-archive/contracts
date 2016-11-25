@@ -4,50 +4,37 @@ Handles exceptions raised by Contracts.
 
 
 cdef class ValidationError(Exception):
-    def __init__(self, message, **kwargs):
-        if isinstance(message, ValidationError):
-            self.message = message.message
-            self.extra = message.extra
+    def __init__(self, object message, list field_names=None):
+        if not isinstance(message, list):
+            message = [message]
 
-        elif isinstance(message, dict):
-            messages = {}
+        self.messages = message
+        self.field_names = field_names
 
-            for field, message in message.items():
-                if isinstance(message, ValidationError):
-                    messages[field] = message
-                else:
-                    messages[field] = ValidationError(message)
 
-            self.message = messages
+cdef class ContractError(ValidationError):
+    def __init__(self, list errors=None):
+        self.messages = {}
 
-        elif isinstance(message, list):
-            messages = []
+        if errors:
+            for error in errors:
+                self.add_error(error)
 
-            for message in message:
-                if isinstance(message, str):
-                    messages.append(ValidationError(message, **kwargs))
-                elif isinstance(message, ValidationError):
-                    messages.append(message)
-                else:
-                    raise Exception('Expected str or ValidationError')
+    cpdef add_error(self, ValidationError error):
+        cdef object field_messages
+        cdef list field_names = error.field_names or ['_contract']
 
-            self.message = messages
+        for field_name in field_names:
+            field_messages = self.messages.get(field_name, None)
 
-        elif isinstance(message, str):
-            self.message = message
-            self.extra = kwargs
+            if field_messages is None:
+                self.messages[field_name] = error.messages
 
-        else:
-            raise Exception('Expected str, list, dict or ValidationError but got ' + str(type(message)))
+            elif isinstance(error.messages, list):
+                field_messages.extend(error.messages)
 
-    cpdef dict as_dict(self, str default_field_name):
-        if isinstance(self.message, dict):
-            return self.message
+            elif isinstance(error.messages, dict):
+                field_messages.update(error.messages)
 
-        if isinstance(self.message, list):
-            return {default_field_name: self.message}
-
-        d = {default_field_name: self.message}
-        d.update(self.extra)
-
-        return d
+            else:
+                raise ValueError('Expected list or dict, got ' + str(type(error.messages)))

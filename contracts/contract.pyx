@@ -2,12 +2,9 @@ cimport cython
 
 from collections import defaultdict
 from . cimport abc
-from .exceptions cimport ValidationError
+from .exceptions cimport ContractError, ValidationError
 from .fields cimport Field
 from .utils cimport missing
-
-
-DEFAULT_FIELD_NAME = '_contract'
 
 
 cdef class BaseContract(abc.Contract):
@@ -51,7 +48,7 @@ cdef class BaseContract(abc.Contract):
         if self.exclude:
             self._prepare_nested_fields('exclude', self.exclude)
             self.exclude = set([field_name for field_name in self.exclude if '.' not in field_name])
-            field_names = field_names - set(self.exclude)
+            field_names -= set(self.exclude)
 
         for field_name, field in self._declared_fields.items():
             field.bind(field_name, self)
@@ -119,23 +116,29 @@ cdef class BaseContract(abc.Contract):
         return self._post_dump(result, data, context)
 
     cdef inline object _load_many(self, object data, dict context):
-        data = self._pre_load_many(data, context)
+        try:
+            data = self._pre_load_many(data, context)
+        except ValidationError as err:
+            raise ContractError([err])
 
         cdef list items = []
 
         for item in data:
             items.append(self._load_single(item, context))
 
-        return self._post_load_many(items, data, context)
+        try:
+            return self._post_load_many(items, data, context)
+        except ValidationError as err:
+            raise ContractError([err])
 
     @cython.boundscheck(False)
     cdef inline object _load_single(self, object data, dict context):
         try:
             data = self._pre_load(data, context)
         except ValidationError as err:
-            raise ValidationError(err.as_dict(DEFAULT_FIELD_NAME))
+            raise ContractError([err])
 
-        cdef dict errors = None
+        cdef ContractError errors = None
         cdef dict result = dict()
         cdef list load_fields = self._load_fields
         cdef int count = len(load_fields)
@@ -158,17 +161,21 @@ cdef class BaseContract(abc.Contract):
                 if value is not missing:
                     result[field.name] = value
             except ValidationError as err:
+                if not err.field_names:
+                    err.field_names = [field.name]
+
                 if errors is None:
-                    errors = dict()
-                errors.update(err.as_dict(field.name))
+                    errors = ContractError([err])
+                else:
+                    errors.add_error(err)
 
         if errors:
-            raise ValidationError(errors)
+            raise errors
 
         try:
             return self._post_load(result, data, context)
         except ValidationError as err:
-            raise ValidationError(err.as_dict(DEFAULT_FIELD_NAME))
+            raise ContractError([err])
 
     cpdef object _pre_dump(self, object data, dict context):
         return data

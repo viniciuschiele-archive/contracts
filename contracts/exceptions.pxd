@@ -4,7 +4,9 @@ Handles exceptions raised by Contracts.
 
 
 cdef class ValidationError(Exception):
-    cdef public object message
-    cdef public dict extra
+    cdef public object messages
+    cdef public list field_names
 
-    cpdef dict as_dict(self, str default_field_name)
+
+cdef class ContractError(ValidationError):
+    cpdef add_error(self, ValidationError error)
