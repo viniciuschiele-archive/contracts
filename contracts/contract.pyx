@@ -113,9 +113,9 @@ cdef class BaseContract(abc.Contract):
             items.append(self._dump_single(item, context))
 
         if self._hooks[POST_DUMP_MANY_INDEX] == 1:
-            data = self._post_dump_many(items, data, context)
+            items = self._post_dump_many(items, data, context)
 
-        return data
+        return items
 
     @cython.boundscheck(False)
     cdef inline object _dump_single(self, object data, dict context):
@@ -141,9 +141,9 @@ cdef class BaseContract(abc.Contract):
                 result[field.dump_to] = value
 
         if self._hooks[POST_DUMP_INDEX] == 1:
-            data = self._post_dump(result, data, context)
+            result = self._post_dump(result, data, context)
 
-        return data
+        return result
 
     cdef inline object _load_many(self, object data, dict context):
         if self._hooks[PRE_LOAD_MANY_INDEX] == 1:
@@ -159,11 +159,11 @@ cdef class BaseContract(abc.Contract):
 
         if self._hooks[POST_LOAD_MANY_INDEX] == 1:
             try:
-                data = self._post_load_many(items, data, context)
+                items = self._post_load_many(items, data, context)
             except ValidationError as err:
                 raise ContractError([err])
 
-        return data
+        return items
 
     @cython.boundscheck(False)
     cdef inline object _load_single(self, object data, dict context):
@@ -209,11 +209,11 @@ cdef class BaseContract(abc.Contract):
 
         if self._hooks[POST_LOAD_INDEX] == 1:
             try:
-                data = self._post_load(result, data, context)
+                result = self._post_load(result, data, context)
             except ValidationError as err:
                 raise ContractError([err])
 
-        return data
+        return result
 
     cpdef object _pre_dump(self, object data, dict context):
         return data

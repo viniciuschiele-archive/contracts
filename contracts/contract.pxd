@@ -8,8 +8,8 @@ cdef class BaseContract(abc.Contract):
     cdef public bint partial
     cdef public dict fields
 
-    cdef list _load_fields
-    cdef list _dump_fields
+    cdef public list _load_fields
+    cdef public list _dump_fields
     cdef int[:] _hooks
 
     cpdef _prepare_fields(self)
