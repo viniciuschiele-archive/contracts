@@ -74,6 +74,8 @@ cdef class Nested(Field):
     cdef public set exclude
     cdef public abc.Contract _instance
 
+    cdef inline abc.Contract _get_instance(self)
+
 
 cdef class String(Field):
     cdef public bint allow_blank

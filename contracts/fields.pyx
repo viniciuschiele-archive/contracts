@@ -444,16 +444,16 @@ cdef class Nested(Field):
 
         self._instance = None
 
-    cpdef bind(self, str name, abc.Contract parent):
-        super(Nested, self).bind(name, parent)
-
-        self._instance = self.nested(many=self.many, only=self.only, exclude=self.exclude)
+    cdef inline abc.Contract _get_instance(self):
+        if not self._instance:
+            self._instance = self.nested(many=self.many, only=self.only, exclude=self.exclude)
+        return self._instance
 
     cpdef object _load(self, object value):
-        return self._instance.load(value)
+        return self._get_instance().load(value)
 
     cpdef object _dump(self, object value):
-        return self._instance.dump(value)
+        return self._get_instance().dump(value)
 
 
 cdef class String(Field):
