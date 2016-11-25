@@ -1,10 +1,28 @@
 cimport cython
 
+from cpython cimport array
 from collections import defaultdict
 from . cimport abc
 from .exceptions cimport ContractError, ValidationError
 from .fields cimport Field
 from .utils cimport missing
+
+
+cdef list HOOK_NAMES = ['_pre_dump', '_pre_dump_many', '_post_dump', '_post_dump_many',
+                        '_pre_load', '_pre_load_many', '_post_load', '_post_load_many']
+
+cdef int HOOK_ENABLED = 1
+cdef int HOOK_DISABLED = 0
+cdef int HOOKS_COUNT = len(HOOK_NAMES)
+
+cdef int PRE_DUMP_INDEX = 0
+cdef int PRE_DUMP_MANY_INDEX = 1
+cdef int POST_DUMP_INDEX = 2
+cdef int POST_DUMP_MANY_INDEX = 3
+cdef int PRE_LOAD_INDEX = 4
+cdef int PRE_LOAD_MANY_INDEX = 5
+cdef int POST_LOAD_INDEX = 6
+cdef int POST_LOAD_MANY_INDEX = 7
 
 
 cdef class BaseContract(abc.Contract):
@@ -13,15 +31,19 @@ cdef class BaseContract(abc.Contract):
     }
 
     _declared_fields = {}
+    _declared_hooks = [HOOK_ENABLED] * HOOKS_COUNT
 
     def __init__(self, bint many=False, set only=None, set exclude=None, bint partial=False):
         self.many = many
         self.only = only
         self.exclude = exclude
         self.partial = partial
+        self.fields = dict(self._declared_fields)
 
         self._load_fields = []
         self._dump_fields = []
+
+        self._hooks = array.array('i', self._declared_hooks)
 
         self._prepare_fields()
 
@@ -82,18 +104,23 @@ cdef class BaseContract(abc.Contract):
         return getattr(data, field_name, missing)
 
     cdef inline object _dump_many(self, object data, dict context):
-        data = self._pre_dump_many(data, context)
+        if self._hooks[PRE_DUMP_MANY_INDEX] == 1:
+            data = self._pre_dump_many(data, context)
 
         cdef list items = []
 
         for item in data:
             items.append(self._dump_single(item, context))
 
-        return self._post_dump_many(items, data, context)
+        if self._hooks[POST_DUMP_MANY_INDEX] == 1:
+            data = self._post_dump_many(items, data, context)
+
+        return data
 
     @cython.boundscheck(False)
     cdef inline object _dump_single(self, object data, dict context):
-        data = self._pre_dump(data, context)
+        if self._hooks[PRE_DUMP_INDEX] == 1:
+            data = self._pre_dump(data, context)
 
         cdef dict result = dict()
         cdef list dump_fields = self._dump_fields
@@ -113,30 +140,38 @@ cdef class BaseContract(abc.Contract):
             if value is not missing:
                 result[field.dump_to] = value
 
-        return self._post_dump(result, data, context)
+        if self._hooks[POST_DUMP_INDEX] == 1:
+            data = self._post_dump(result, data, context)
+
+        return data
 
     cdef inline object _load_many(self, object data, dict context):
-        try:
-            data = self._pre_load_many(data, context)
-        except ValidationError as err:
-            raise ContractError([err])
+        if self._hooks[PRE_LOAD_MANY_INDEX] == 1:
+            try:
+                data = self._pre_load_many(data, context)
+            except ValidationError as err:
+                raise ContractError([err])
 
         cdef list items = []
 
         for item in data:
             items.append(self._load_single(item, context))
 
-        try:
-            return self._post_load_many(items, data, context)
-        except ValidationError as err:
-            raise ContractError([err])
+        if self._hooks[POST_LOAD_MANY_INDEX] == 1:
+            try:
+                data = self._post_load_many(items, data, context)
+            except ValidationError as err:
+                raise ContractError([err])
+
+        return data
 
     @cython.boundscheck(False)
     cdef inline object _load_single(self, object data, dict context):
-        try:
-            data = self._pre_load(data, context)
-        except ValidationError as err:
-            raise ContractError([err])
+        if self._hooks[PRE_LOAD_INDEX] == 1:
+            try:
+                data = self._pre_load(data, context)
+            except ValidationError as err:
+                raise ContractError([err])
 
         cdef ContractError errors = None
         cdef dict result = dict()
@@ -172,10 +207,13 @@ cdef class BaseContract(abc.Contract):
         if errors:
             raise errors
 
-        try:
-            return self._post_load(result, data, context)
-        except ValidationError as err:
-            raise ContractError([err])
+        if self._hooks[POST_LOAD_INDEX] == 1:
+            try:
+                data = self._post_load(result, data, context)
+            except ValidationError as err:
+                raise ContractError([err])
+
+        return data
 
     cpdef object _pre_dump(self, object data, dict context):
         return data
@@ -204,6 +242,7 @@ cdef class BaseContract(abc.Contract):
 
 class ContractMeta(type):
     def __new__(mcs, name, bases, attrs):
+        attrs['_declared_hooks'] = mcs.get_declared_hooks(bases, attrs)
         attrs['_declared_fields'] = mcs.get_declared_fields(bases, attrs)
         return super(ContractMeta, mcs).__new__(mcs, name, bases, attrs)
 
@@ -220,6 +259,27 @@ class ContractMeta(type):
                 fields = list(base._declared_fields.items()) + fields
 
         return dict(fields)
+
+    @classmethod
+    def get_declared_hooks(mcs, bases, attrs):
+        hooks = [HOOK_DISABLED] * HOOKS_COUNT
+
+        for index, hook_name in enumerate(HOOK_NAMES):
+            if attrs.get(hook_name):
+                hooks[index] = 1
+
+        for base in reversed(bases):
+            # do not consider the BaseContract
+            # because the hook methods are defined in there.
+            if base is BaseContract:
+                continue
+
+            if hasattr(base, '_declared_hooks'):
+                for index, value in enumerate(base._declared_hooks):
+                    if value == HOOK_ENABLED:
+                        hooks[index] = HOOK_ENABLED
+
+        return hooks
 
 
 class Contract(BaseContract, metaclass=ContractMeta):
