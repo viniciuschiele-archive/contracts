@@ -88,7 +88,7 @@ class TestField(TestCase):
         with self.assertRaises(ValidationError) as e:
             field._fail('null')
 
-        self.assertEqual(str(e.exception), 'This field may not be null.')
+        self.assertEqual(e.exception.messages, ['This field may not be null.'])
 
     def test_not_found_error_message(self):
         field = fields.Field()
@@ -102,16 +102,15 @@ class TestField(TestCase):
         with self.assertRaises(ValidationError) as e:
             field._fail('custom')
 
-        self.assertEqual(str(e.exception), 'custom fail')
+        self.assertEqual(e.exception.messages, ['custom fail'])
 
-    # def test_dict_error_message(self):
-    #     field = fields.Field(error_messages={'invalid': ValidationError(message='error message', code=123)})
-    #
-    #     with self.assertRaises(ValidationError) as e:
-    #         field._fail('invalid')
-    #
-    #     self.assertEqual(e.exception.message, '')
-    #     #self.assertEqual(exc_info.exception.message, {'field': [ValidationError('error message', code=123)]})
+    def test_dict_error_message(self):
+        field = fields.Field(error_messages={'invalid': {'message': 'error message', 'code': 123}})
+
+        with self.assertRaises(ValidationError) as e:
+            field._fail('invalid')
+
+        self.assertEqual(e.exception.messages, [{'message': 'error message', 'code': 123}])
 
 
 class TestBoolean(TestCase):
