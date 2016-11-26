@@ -45,11 +45,15 @@ cdef class Field(abc.Field):
 
         self.name = None
         self.parent = None
+
         self._decorator_validators = []
 
         self._prepare_error_messages(error_messages)
 
-    cpdef bind(self, str name, abc.Contract parent):
+    cpdef bind(self, str name, object parent):
+        if not issubclass(parent, abc.Contract):
+            raise TypeError('Expected abc.Contract, got ' + str(parent))
+
         self.name = name
         self.parent = parent
 
@@ -406,20 +410,22 @@ cdef class Method(Field):
         self._dump_method = None
         self._load_method = None
 
-    cpdef bind(self, str name, abc.Contract parent):
+    cpdef bind(self, str name, object parent):
         super(Method, self).bind(name, parent)
 
         if self.dump_method_name:
-            dump_method = getattr(self.parent, self.dump_method_name, None)
-            if not callable(dump_method):
-                raise ValueError('Object {0!r} is not callable.'.format(dump_method))
-            self._dump_method = dump_method
+            self._dump_method = self._get_method(self.dump_method_name)
 
         if self.load_method_name:
-            load_method = getattr(self.parent, self.load_method_name, None)
-            if not callable(load_method):
-                raise ValueError('Object {0!r} is not callable.'.format(load_method))
-            self._load_method = load_method
+            self._load_method = self._get_method(self.load_method_name)
+
+    cpdef _get_method(self, str method_name):
+        method = getattr(self.parent, method_name)
+
+        if not callable(method):
+            raise ValueError('Object {0!r} is not callable.'.format(method))
+
+        return method
 
     cpdef object _dump(self, object value):
         if not self._dump_method:

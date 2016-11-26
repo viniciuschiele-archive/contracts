@@ -7,7 +7,7 @@ cdef class Contract(object):
 
 
 cdef class Field(object):
-    cpdef bind(self, str name, Contract parent):
+    cpdef bind(self, str name, object parent):
         raise NotImplemented()
 
     cpdef object dump(self, object value):

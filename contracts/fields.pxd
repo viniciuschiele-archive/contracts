@@ -4,7 +4,7 @@ from cpython.datetime cimport datetime
 
 cdef class Field(abc.Field):
     cdef public str name
-    cdef public abc.Contract parent
+    cdef public object parent
     cdef public bint dump_only
     cdef public bint load_only
     cdef public object default_value
@@ -65,6 +65,8 @@ cdef class Method(Field):
     cdef public str load_method_name
     cdef public object _dump_method
     cdef public object _load_method
+
+    cpdef _get_method(self, str method_name)
 
 
 cdef class Nested(Field):

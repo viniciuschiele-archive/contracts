@@ -45,14 +45,12 @@ class TestField(TestCase):
         class Parent(Contract):
             pass
 
-        parent = Parent()
-
         field = fields.Field()
-        field.bind('field1', parent)
+        field.bind('field1', Parent)
 
         self.assertEqual(field.dump_to, 'field1')
         self.assertEqual(field.load_from, 'field1')
-        self.assertEqual(field.parent, parent)
+        self.assertEqual(field.parent, Parent)
 
     def test_validator(self):
         def validator(value):
@@ -380,22 +378,24 @@ class TestMethod(TestCase):
     Valid and invalid values for `Method`.
     """
     def test_dump_func(self):
-        class Data(Contract):
-            def dump_method(self, value):
+        class MyContract(Contract):
+            @staticmethod
+            def dump_method(value):
                 return value
 
         field = fields.Method(dump_method_name='dump_method')
-        field.bind('field', Data())
+        field.bind('field', MyContract)
 
         self.assertEqual(field.dump('value'), 'value')
 
     def test_load_func(self):
-        class Data(Contract):
-            def load_method(self, value):
+        class MyContract(Contract):
+            @staticmethod
+            def load_method(value):
                 return value
 
         field = fields.Method(load_method_name='load_method')
-        field.bind('field', Data())
+        field.bind('field', MyContract)
 
         self.assertEqual(field.load('value'), 'value')
 
@@ -405,14 +405,14 @@ class TestMethod(TestCase):
         self.assertEqual(field.load('value'), missing)
 
     def test_not_callable_methods(self):
-        class Data(Contract):
+        class MyContract(Contract):
             dump_method = 'attribute'
 
         field = fields.Method(dump_method_name='dump_method')
-        self.assertRaises(ValueError, field.bind, 'field', Data())
+        self.assertRaises(ValueError, field.bind, 'field', MyContract)
 
         field = fields.Method(load_method_name='not_found')
-        self.assertRaises(ValueError, field.bind, 'field', Data())
+        self.assertRaises(AttributeError, field.bind, 'field', MyContract)
 
 
 class TestString(TestCase):

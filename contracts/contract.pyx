@@ -73,8 +73,6 @@ cdef class BaseContract(abc.Contract):
             field_names -= set(self.exclude)
 
         for field_name, field in self._declared_fields.items():
-            field.bind(field_name, self)
-
             if field.name in field_names:
                 if field.load_only:
                     self._load_fields.append(field)
@@ -123,15 +121,14 @@ cdef class BaseContract(abc.Contract):
             data = self._pre_dump(data, context)
 
         cdef dict result = dict()
-        cdef list dump_fields = self._dump_fields
-        cdef int count = len(dump_fields)
 
         cdef Field field
-        cdef object raw
-        cdef object value
+        cdef object raw, value
+
+        cdef int count = len(self._dump_fields)
 
         for i in range(count):
-            field = dump_fields[i]
+            field = self._dump_fields[i]
 
             raw = self._get_value(data, field.name)
 
@@ -179,8 +176,7 @@ cdef class BaseContract(abc.Contract):
         cdef int count = len(load_fields)
 
         cdef Field field
-        cdef object raw
-        cdef object value
+        cdef object raw, value
 
         for i in range(count):
             field = load_fields[i]
@@ -218,33 +214,41 @@ cdef class BaseContract(abc.Contract):
     cpdef object _pre_dump(self, object data, dict context):
         return data
 
-    cpdef object _pre_dump_many(self, list data, dict context):
+    cpdef object _pre_dump_many(self, object data, dict context):
         return data
 
     cpdef object _pre_load(self, object data, dict context):
         return data
 
-    cpdef object _pre_load_many(self, list data, dict context):
+    cpdef object _pre_load_many(self, object data, dict context):
         return data
 
     cpdef object _post_dump(self, object data, object original_data, dict context):
         return data
 
-    cpdef object _post_dump_many(self, list data, object original_data, dict context):
+    cpdef object _post_dump_many(self, object data, object original_data, dict context):
         return data
 
     cpdef object _post_load(self, object data, object original_data, dict context):
         return data
 
-    cpdef object _post_load_many(self, list data, object original_data, dict context):
+    cpdef object _post_load_many(self, object data, object original_data, dict context):
         return data
 
 
 class ContractMeta(type):
     def __new__(mcs, name, bases, attrs):
-        attrs['_declared_hooks'] = mcs.get_declared_hooks(bases, attrs)
-        attrs['_declared_fields'] = mcs.get_declared_fields(bases, attrs)
-        return super(ContractMeta, mcs).__new__(mcs, name, bases, attrs)
+        declared_fields = mcs.get_declared_fields(bases, attrs)
+
+        cls = super(ContractMeta, mcs).__new__(mcs, name, bases, attrs)
+
+        for name, field in declared_fields.items():
+            field.bind(name, cls)
+
+        cls._declared_fields = declared_fields
+        cls._declared_hooks = mcs.get_declared_hooks(bases, attrs)
+
+        return cls
 
     @classmethod
     def get_declared_fields(mcs, bases, attrs):
