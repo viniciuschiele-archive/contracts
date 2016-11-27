@@ -46,8 +46,6 @@ cdef class Field(abc.Field):
         self.name = None
         self.parent = None
 
-        self._decorator_validators = []
-
         self._prepare_error_messages(error_messages)
 
     cpdef bind(self, str name, object parent):
@@ -63,8 +61,9 @@ cdef class Field(abc.Field):
         if not self.load_from:
             self.load_from = name
 
-        for validator in self._decorator_validators:
-            self.validators.append(getattr(parent, validator))
+        validator = getattr(parent, '_validate_' + name, None)
+        if validator:
+            self.validators.append(validator)
 
     cpdef object dump(self, object value):
         if value is missing:
@@ -91,10 +90,6 @@ cdef class Field(abc.Field):
         validated_value = self._load(value)
         self._validate(validated_value)
         return validated_value
-
-    cpdef validator(self, func):
-        self._decorator_validators.append(func.__name__)
-        return func
 
     cdef _prepare_error_messages(self, dict error_messages):
         cdef dict messages = {}
@@ -280,7 +275,7 @@ cdef class Float(Field):
     }
 
     def __init__(self, min_value=None, max_value=None, **kwargs):
-        super().__init__(**kwargs)
+        super(Float, self).__init__(**kwargs)
         self.min_value = min_value
         self.max_value = max_value
 
@@ -331,7 +326,7 @@ cdef class Integer(Field):
     }
 
     def __init__(self, min_value=None, max_value=None, **kwargs):
-        super().__init__(**kwargs)
+        super(Integer, self).__init__(**kwargs)
         self.min_value = min_value
         self.max_value = max_value
 
@@ -361,7 +356,7 @@ cdef class List(Field):
     }
 
     def __init__(self, abc.Field child, bint allow_empty=True, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        super(List, self).__init__(*args, **kwargs)
 
         self.child = child
         self.allow_empty = allow_empty
@@ -475,7 +470,7 @@ cdef class String(Field):
     }
 
     def __init__(self, allow_blank=None, trim_whitespace=None, min_length=None, max_length=None, **kwargs):
-        super().__init__(**kwargs)
+        super(String, self).__init__(**kwargs)
 
         if allow_blank is None:
             self.allow_blank = self.default_options.get('allow_blank')
@@ -526,7 +521,7 @@ cdef class UUID(Field):
     valid_formats = ('hex_verbose', 'hex', 'int')
 
     def __init__(self, str dump_format=None, **kwargs):
-        super().__init__(**kwargs)
+        super(UUID, self).__init__(**kwargs)
 
         if dump_format is None:
             dump_format = self.default_options.get('dump_format')
