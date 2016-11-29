@@ -144,7 +144,7 @@ cdef class Field(object):
                 else:
                     errors.extend(e.messages)
 
-        for validator in self._contract_validators:
+        for validator in self._method_validators:
             try:
                 if validator(context.contract, value) is False:
                     self._fail('validator_failed')
