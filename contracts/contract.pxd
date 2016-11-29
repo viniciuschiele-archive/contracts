@@ -3,9 +3,6 @@ cdef class Context(object):
     cdef public object contract_data
     cdef public dict _data
 
-    cpdef object get_item(self, str key)
-    cpdef set_item(self, str key, object value)
-
 
 cdef class BaseContract(object):
     cdef public bint many

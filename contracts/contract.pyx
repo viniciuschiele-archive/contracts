@@ -25,13 +25,19 @@ cdef int POST_LOAD_MANY_INDEX = 7
 
 
 cdef class Context(object):
-    cpdef object get_item(self, str key):
+    def __contains__(self, key):
+        if self._data is None:
+            return False
+
+        return key in self._data
+
+    def __getitem__(self, y):
         if self._data is None:
             return None
 
-        return self._data.get(key)
+        return self._data.get(y)
 
-    cpdef set_item(self, str key, object value):
+    def __setitem__(self, key, value):
         if self._data is None:
             self._data = dict()
 
