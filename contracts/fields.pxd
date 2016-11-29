@@ -15,16 +15,18 @@ cdef class Field(object):
     cdef public bint required
     cdef public list validators
     cdef public dict error_messages
+    cdef public list _method_validators
 
     cpdef bind(self, str name, object parent)
     cpdef object dump(self, object value, Context context)
     cpdef object load(self, object value, Context context)
+    cpdef object validator(self, func)
 
     cdef _prepare_error_messages(self, dict error_messages)
     cpdef object _get_default(self)
     cpdef object _dump(self, object value, Context context)
     cpdef object _load(self, object value, Context context)
-    cpdef _validate(self, object value)
+    cpdef _validate(self, object value, Context context)
 
 
 cdef class Boolean(Field):

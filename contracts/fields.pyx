@@ -31,6 +31,7 @@ cdef class Field(object):
         self.dump_to = dump_to
         self.load_from = load_from
         self.validators = validators or []
+        self._method_validators = []
 
         # If `required` is unset, then use `True` unless a default is provided.
         if required is None:
@@ -84,8 +85,12 @@ cdef class Field(object):
             return self._get_default()
 
         validated_value = self._load(value, context)
-        self._validate(validated_value)
+        self._validate(validated_value, context)
         return validated_value
+
+    cpdef object validator(self, func):
+        self._method_validators.append(func)
+        return func
 
     cdef _prepare_error_messages(self, dict error_messages):
         cdef dict messages = {}
@@ -126,12 +131,22 @@ cdef class Field(object):
                 'not exist in the `error_messages` dictionary.'.format(
                     class_name=self.__class__.__name__, key=key))
 
-    cpdef _validate(self, object value):
+    cpdef _validate(self, object value, Context context):
         cdef list errors = None
 
         for validator in self.validators:
             try:
                 if validator(value) is False:
+                    self._fail('validator_failed')
+            except ValidationError as e:
+                if errors is None:
+                    errors = e.messages
+                else:
+                    errors.extend(e.messages)
+
+        for validator in self._contract_validators:
+            try:
+                if validator(context.contract, value) is False:
                     self._fail('validator_failed')
             except ValidationError as e:
                 if errors is None:
