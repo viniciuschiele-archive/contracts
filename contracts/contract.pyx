@@ -2,7 +2,6 @@ cimport cython
 
 from cpython cimport array
 from collections import defaultdict
-from . cimport abc
 from .exceptions cimport ContractError, ValidationError
 from .fields cimport Field
 from .utils cimport missing
@@ -25,7 +24,21 @@ cdef int POST_LOAD_INDEX = 6
 cdef int POST_LOAD_MANY_INDEX = 7
 
 
-cdef class BaseContract(abc.Contract):
+cdef class Context(object):
+    cpdef object get_item(self, str key):
+        if self._data is None:
+            return None
+
+        return self._data.get(key)
+
+    cpdef set_item(self, str key, object value):
+        if self._data is None:
+            self._data = dict()
+
+        self._data[key] = value
+
+
+cdef class BaseContract(object):
     default_error_messages = {
         'invalid': 'Invalid data. Expected a dictionary, but got {datatype}.'
     }
@@ -47,17 +60,45 @@ cdef class BaseContract(abc.Contract):
 
         self._prepare_fields()
 
-    cpdef object dump(self, object data, dict context=None):
-        if self.many:
-            return self._dump_many(data, context)
-        else:
-            return self._dump_single(data, context)
+    cpdef object dump(self, object data, Context context=None):
+        if context is None:
+            context = Context()
 
-    cpdef object load(self, object data, dict context=None):
+        previous_contract = context.contract
+        previous_contract_data = context.contract_data
+
+        context.contract = self
+        context.contract_data = data
+
         if self.many:
-            return self._load_many(data, context)
+            data = self._dump_many(data, context)
         else:
-            return self._load_single(data, context)
+            data = self._dump_single(data, context)
+
+        context.contract = previous_contract
+        context.contract_data = previous_contract_data
+
+        return data
+
+    cpdef object load(self, object data, Context context=None):
+        if context is None:
+            context = Context()
+
+        previous_contract = context.contract
+        previous_contract_data = context.contract_data
+
+        context.contract = self
+        context.contract_data = data
+
+        if self.many:
+            data = self._load_many(data, context)
+        else:
+            data = self._load_single(data, context)
+
+        context.contract = previous_contract
+        context.contract_data = previous_contract_data
+
+        return data
 
     cpdef _prepare_fields(self):
         if self.only:
@@ -101,22 +142,24 @@ cdef class BaseContract(abc.Contract):
 
         return getattr(data, field_name, missing)
 
-    cdef inline object _dump_many(self, object data, dict context):
+    cdef inline object _dump_many(self, object data, Context context):
         if self._hooks[PRE_DUMP_MANY_INDEX] == 1:
             data = self._pre_dump_many(data, context)
 
         cdef list items = []
 
         for item in data:
+            context.contract_data = item
+
             items.append(self._dump_single(item, context))
 
         if self._hooks[POST_DUMP_MANY_INDEX] == 1:
-            items = self._post_dump_many(items, data, context)
+            items = self._post_dump_many(items, context)
 
         return items
 
     @cython.boundscheck(False)
-    cdef inline object _dump_single(self, object data, dict context):
+    cdef inline object _dump_single(self, object data, Context context):
         if self._hooks[PRE_DUMP_INDEX] == 1:
             data = self._pre_dump(data, context)
 
@@ -132,17 +175,17 @@ cdef class BaseContract(abc.Contract):
 
             raw = self._get_value(data, field.name)
 
-            value = field.dump(raw)
+            value = field.dump(raw, context)
 
             if value is not missing:
                 result[field.dump_to] = value
 
         if self._hooks[POST_DUMP_INDEX] == 1:
-            result = self._post_dump(result, data, context)
+            result = self._post_dump(result, context)
 
         return result
 
-    cdef inline object _load_many(self, object data, dict context):
+    cdef inline object _load_many(self, object data, Context context):
         if self._hooks[PRE_LOAD_MANY_INDEX] == 1:
             try:
                 data = self._pre_load_many(data, context)
@@ -156,14 +199,14 @@ cdef class BaseContract(abc.Contract):
 
         if self._hooks[POST_LOAD_MANY_INDEX] == 1:
             try:
-                items = self._post_load_many(items, data, context)
+                items = self._post_load_many(items, context)
             except ValidationError as err:
                 raise ContractError([err])
 
         return items
 
     @cython.boundscheck(False)
-    cdef inline object _load_single(self, object data, dict context):
+    cdef inline object _load_single(self, object data, Context context):
         if self._hooks[PRE_LOAD_INDEX] == 1:
             try:
                 data = self._pre_load(data, context)
@@ -187,7 +230,7 @@ cdef class BaseContract(abc.Contract):
                 if self.partial and raw is missing:
                     continue
 
-                value = field.load(raw)
+                value = field.load(raw, context)
 
                 if value is not missing:
                     result[field.name] = value
@@ -205,34 +248,34 @@ cdef class BaseContract(abc.Contract):
 
         if self._hooks[POST_LOAD_INDEX] == 1:
             try:
-                result = self._post_load(result, data, context)
+                result = self._post_load(result, context)
             except ValidationError as err:
                 raise ContractError([err])
 
         return result
 
-    cpdef object _pre_dump(self, object data, dict context):
+    cpdef object _pre_dump(self, object data, Context context):
         return data
 
-    cpdef object _pre_dump_many(self, object data, dict context):
+    cpdef object _pre_dump_many(self, object data, Context context):
         return data
 
-    cpdef object _pre_load(self, object data, dict context):
+    cpdef object _pre_load(self, object data, Context context):
         return data
 
-    cpdef object _pre_load_many(self, object data, dict context):
+    cpdef object _pre_load_many(self, object data, Context context):
         return data
 
-    cpdef object _post_dump(self, object data, object original_data, dict context):
+    cpdef object _post_dump(self, object data, Context context):
         return data
 
-    cpdef object _post_dump_many(self, object data, object original_data, dict context):
+    cpdef object _post_dump_many(self, object data, Context context):
         return data
 
-    cpdef object _post_load(self, object data, object original_data, dict context):
+    cpdef object _post_load(self, object data, Context context):
         return data
 
-    cpdef object _post_load_many(self, object data, object original_data, dict context):
+    cpdef object _post_load_many(self, object data, Context context):
         return data
 
 

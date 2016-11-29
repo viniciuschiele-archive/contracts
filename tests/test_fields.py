@@ -7,39 +7,55 @@ from datetime import datetime, date
 from unittest import TestCase
 
 
-class TestField(TestCase):
+class BaseTestCase(TestCase):
+    def _dump_equal(self, field, input_value, expected_value):
+        self.assertEqual(expected_value, field.dump(input_value, None))
+
+    def _dump_raises(self, field, input_value, expected_exception):
+        self.assertRaises(expected_exception, field.dump, input_value, None)
+
+    def _load_equal(self, field, input_value, expected_value):
+        self.assertEqual(expected_value, field.load(input_value, None))
+
+    def _load_raises(self, field, input_value, expected_failure):
+        with self.assertRaises(ValidationError) as exc_info:
+            field.load(input_value, None)
+        self.assertEqual(expected_failure, exc_info.exception.messages)
+
+
+class TestField(BaseTestCase):
     """
-    Valid and invalid values for `Boolean`.
+    Valid and invalid values for `Field`.
     """
     def test_default(self):
         field = fields.Field(default=123)
-        self.assertEqual(field.load(missing), 123)
+        self._load_equal(field, missing, 123)
 
     def test_callable_default(self):
         field = fields.Field(default=lambda: 123)
-        self.assertEqual(field.load(missing), 123)
+        self._load_equal(field, missing, 123)
 
     def test_bypass_default_on_loading(self):
         field = fields.Field(default=123)
-        self.assertEqual(field.load(456), 456)
+        self._load_equal(field, 456, 456)
 
     def test_required(self):
         field = fields.Field(required=True)
-        self.assertRaises(ValidationError, field.load, missing)
-        self.assertEqual(field.load('abc'), 'abc')
+        self._load_raises(field, missing, ['This field is required.'])
+        self._load_equal(field, 'abc', 'abc')
 
     def test_non_required(self):
         field = fields.Field(required=False)
-        self.assertEqual(field.load(missing), missing)
-        self.assertEqual(field.load('abc'), 'abc')
+        self._load_equal(field, missing, missing)
+        self._load_equal(field, 'abc', 'abc')
 
     def test_allow_none(self):
         field = fields.Field(allow_none=True)
-        self.assertEqual(field.load(None), None)
+        self._load_equal(field, None, None)
 
-    def test_disallow(self):
+    def test_disallow_none(self):
         field = fields.Field(allow_none=False)
-        self.assertRaises(ValidationError, field.load, None)
+        self._load_raises(field, None, ['This field may not be null.'])
 
     def test_bind(self):
         class Parent(Contract):
@@ -57,28 +73,28 @@ class TestField(TestCase):
             pass
 
         field = fields.Field(validators=[validator])
-        self.assertEqual(field.load(123), 123)
+        self._load_equal(field, 123, 123)
 
     def test_validator_returning_true(self):
         def validator(value):
             return True
 
         field = fields.Field(validators=[validator])
-        self.assertEqual(field.load(123), 123)
+        self._load_equal(field, 123, 123)
 
     def test_validator_returning_false(self):
         def validator(value):
             return False
 
         field = fields.Field(validators=[validator])
-        self.assertRaises(ValidationError, field.load, 123)
+        self._load_raises(field, 123, ['Invalid value.'])
 
     def test_validator_raising_error(self):
         def validator(value):
             raise ValueError()
 
         field = fields.Field(validators=[validator])
-        self.assertRaises(ValueError, field.load, 123)
+        self.assertRaises(ValueError, field.load, 123, None)
 
     def test_null_error_message(self):
         field = fields.Field()
@@ -111,7 +127,7 @@ class TestField(TestCase):
         self.assertEqual(e.exception.messages, [{'message': 'error message', 'code': 123}])
 
 
-class TestBoolean(TestCase):
+class TestBoolean(BaseTestCase):
     """
     Valid and invalid values for `Boolean`.
     """
@@ -119,161 +135,161 @@ class TestBoolean(TestCase):
         field = fields.Boolean()
 
         for value in ('True', 'true', 'TRUE', '1', 1, True):
-            self.assertEqual(field.load(value), True)
+            self._load_equal(field, value, True)
 
         for value in ('False', 'false', 'FALSE', '0', 0, False):
-            self.assertEqual(field.load(value), False)
+            self._load_equal(field, value, False)
 
     def test_invalid_inputs(self):
-        self.assertRaises(ValidationError, fields.Boolean().load, 'foo')
-        self.assertRaises(ValidationError, fields.Boolean().load, [])
+        self._load_raises(fields.Boolean(), 'foo', ['"foo" is not a valid boolean.'])
+        self._load_raises(fields.Boolean(), [], ['"[]" is not a valid boolean.'])
 
     def test_valid_outputs(self):
         field = fields.Boolean()
 
         for value in ('True', 'true', 'TRUE', '1', 'other', 1, True):
-            self.assertEqual(field.dump(value), True)
+            self._dump_equal(field, value, True)
 
         for value in ('False', 'false', 'FALSE', '0', 0, False):
-            self.assertEqual(field.dump(value), False)
+            self._dump_equal(field, value, False)
 
     def test_invalid_outputs(self):
         field = fields.Boolean()
-        self.assertRaises(TypeError, field.dump, [])
-        self.assertRaises(TypeError, field.dump, {})
+        self._dump_raises(field, [], TypeError)
+        self._dump_raises(field, {}, TypeError)
 
 
-class TestDate(TestCase):
+class TestDate(BaseTestCase):
     """
     Valid and invalid values for `Date`.
     """
     def test_valid_inputs(self):
         field = fields.Date()
-        self.assertEqual(field.load('2001-01'), date(2001, 1, 1))
-        self.assertEqual(field.load('2001-01-20'), date(2001, 1, 20))
-        self.assertEqual(field.load('20010120'), date(2001, 1, 20))
-        self.assertEqual(field.load('2001-01-20T01:00:00'), date(2001, 1, 20))
-        self.assertEqual(field.load(date(2001, 1, 20)), date(2001, 1, 20))
-        self.assertEqual(field.load(datetime(2001, 1, 20, 12, 00)), date(2001, 1, 20))
+        self._load_equal(field, '2001-01', date(2001, 1, 1))
+        self._load_equal(field, '2001-01-20', date(2001, 1, 20))
+        self._load_equal(field, '20010120', date(2001, 1, 20))
+        self._load_equal(field, '2001-01-20T01:00:00', date(2001, 1, 20))
+        self._load_equal(field, date(2001, 1, 20), date(2001, 1, 20))
+        self._load_equal(field, datetime(2001, 1, 20, 12, 00), date(2001, 1, 20))
 
     def test_invalid_inputs(self):
         field = fields.Date()
-        self.assertRaises(ValidationError, field.load, '')
-        self.assertRaises(ValidationError, field.load, 'abc')
-        self.assertRaises(ValidationError, field.load, '2001-13-01')
-        self.assertRaises(ValidationError, field.load, '2001-01-32')
-        self.assertRaises(ValidationError, field.load, 20010120)
+        self._load_raises(field, '', ['Date has wrong format.'])
+        self._load_raises(field, 'abc', ['Date has wrong format.'])
+        self._load_raises(field, '2001-13-01', ['Date has wrong format.'])
+        self._load_raises(field, '2001-01-32', ['Date has wrong format.'])
+        self._load_raises(field, 20010120, ['Date has wrong format.'])
 
     def test_valid_outputs(self):
         field = fields.Date()
-        self.assertEqual(field.dump(date(2001, 1, 20)), '2001-01-20')
-        self.assertEqual(field.dump(datetime(2001, 1, 20, 12, 00)), '2001-01-20')
+        self._dump_equal(field, date(2001, 1, 20), '2001-01-20')
+        self._dump_equal(field, datetime(2001, 1, 20, 12, 00), '2001-01-20')
 
     def test_invalid_outputs(self):
         field = fields.Date()
-        self.assertRaises(AttributeError, field.dump, '2001-01-20')
-        self.assertRaises(AttributeError, field.dump, 'abc')
+        self._dump_raises(field, '2001-01-20', AttributeError)
+        self._dump_raises(field, 'abc', AttributeError)
 
 
-class TestDateTime(TestCase):
+class TestDateTime(BaseTestCase):
     """
     Valid and invalid values for `DateTime`.
     """
 
     def test_valid_inputs(self):
         field = fields.DateTime()
-        self.assertEqual(field.load('2001-01-01'), datetime(2001, 1, 1))
-        self.assertEqual(field.load('2001-01-01 13:00'), datetime(2001, 1, 1, 13, 00))
-        self.assertEqual(field.load('2001-01-01T13:00:01'), datetime(2001, 1, 1, 13, 0, 1))
-        self.assertEqual(field.load('2001-01-01T13:00:01.001'), datetime(2001, 1, 1, 13, 0, 1, 1000))
-        self.assertEqual(field.load('2001-01-01T13:00Z'), datetime(2001, 1, 1, 13, 00))
-        self.assertEqual(field.load('2001-01-01T13:00+00:00'), datetime(2001, 1, 1, 13, 00))
-        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00)), datetime(2001, 1, 1, 13, 00))
-        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc)), datetime(2001, 1, 1, 13, 00))
+        self._load_equal(field, '2001-01-01', datetime(2001, 1, 1))
+        self._load_equal(field, '2001-01-01 13:00', datetime(2001, 1, 1, 13, 00))
+        self._load_equal(field, '2001-01-01T13:00:01', datetime(2001, 1, 1, 13, 0, 1))
+        self._load_equal(field, '2001-01-01T13:00:01.001', datetime(2001, 1, 1, 13, 0, 1, 1000))
+        self._load_equal(field, '2001-01-01T13:00Z', datetime(2001, 1, 1, 13, 00))
+        self._load_equal(field, '2001-01-01T13:00+00:00', datetime(2001, 1, 1, 13, 00))
+        self._load_equal(field, datetime(2001, 1, 1, 13, 00), datetime(2001, 1, 1, 13, 00))
+        self._load_equal(field, datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc), datetime(2001, 1, 1, 13, 00))
 
     def test_valid_inputs_with_default_timezone(self):
         field = fields.DateTime(default_timezone=timezone.utc)
-        self.assertEqual(field.load('2001-01-01'), datetime(2001, 1, 1, tzinfo=timezone.utc))
-        self.assertEqual(field.load('2001-01-01 13:00'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
-        self.assertEqual(field.load('2001-01-01T13:00'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
-        self.assertEqual(field.load('2001-01-01T13:00Z'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
-        self.assertEqual(field.load('2001-01-01T13:00+00:00'), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
-        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00)), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
-        self.assertEqual(field.load(datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc)), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self._load_equal(field, '2001-01-01', datetime(2001, 1, 1, tzinfo=timezone.utc))
+        self._load_equal(field, '2001-01-01 13:00', datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self._load_equal(field, '2001-01-01T13:00', datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self._load_equal(field, '2001-01-01T13:00Z', datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self._load_equal(field, '2001-01-01T13:00+00:00', datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self._load_equal(field, datetime(2001, 1, 1, 13, 00), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
+        self._load_equal(field, datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc), datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc))
 
     def test_invalid_inputs(self):
         field = fields.DateTime()
-        self.assertRaises(ValidationError, field.load, '')
-        self.assertRaises(ValidationError, field.load, 'abc')
-        self.assertRaises(ValidationError, field.load, '2001-13-01')
-        self.assertRaises(ValidationError, field.load, '2001-01-32')
-        # self.assertRaises(ValidationError, field.load, '2001-01-01T99:00')
-        self.assertRaises(ValidationError, field.load, 20010120)
-        self.assertRaises(ValidationError, field.load, date(2001, 1, 1))
+        self._load_raises(field, '', ['Datetime has wrong format.'])
+        self._load_raises(field, 'abc', ['Datetime has wrong format.'])
+        self._load_raises(field, '2001-13-01', ['Datetime has wrong format.'])
+        self._load_raises(field, '2001-01-32', ['Datetime has wrong format.'])
+        # self._load_raises(field, '2001-01-01T99:00', ['Datetime has wrong format.'])
+        self._load_raises(field, 20010120, ['Datetime has wrong format.'])
+        self._load_raises(field, date(2001, 1, 1), ['Expected a datetime but got a date.'])
 
     def test_valid_outputs(self):
         field = fields.DateTime()
-        self.assertEqual(field.dump(datetime(2001, 1, 1, 13, 00)), '2001-01-01T13:00:00')
-        self.assertEqual(field.dump(datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc)), '2001-01-01T13:00:00+00:00')
+        self._dump_equal(field, datetime(2001, 1, 1, 13, 00), '2001-01-01T13:00:00')
+        self._dump_equal(field, datetime(2001, 1, 1, 13, 00, tzinfo=timezone.utc), '2001-01-01T13:00:00+00:00')
 
     def test_invalid_outputs(self):
         field = fields.DateTime()
-        self.assertRaises(AttributeError, field.dump, '2001-01-01T13:00:00')
-        self.assertRaises(AttributeError, field.dump, 123)
+        self._dump_raises(field, '2001-01-01T13:00:00', AttributeError)
+        self._dump_raises(field, 123, AttributeError)
 
 
-class TestFloat(TestCase):
+class TestFloat(BaseTestCase):
     """
     Valid and invalid values for `Float`.
     """
     def test_valid_inputs(self):
         field = fields.Float()
-        self.assertEqual(field.load('1'), 1.0)
-        self.assertEqual(field.load('0'), 0.0)
-        self.assertEqual(field.load(1), 1.0)
-        self.assertEqual(field.load(0), 0.0)
-        self.assertEqual(field.load(1.0), 1.0)
-        self.assertEqual(field.load(0.0), 0.0)
+        self._load_equal(field, '1', 1.0)
+        self._load_equal(field, '0', 0.0)
+        self._load_equal(field, 1, 1.0)
+        self._load_equal(field, 0, 0.0)
+        self._load_equal(field, 1.0, 1.0)
+        self._load_equal(field, 0.0, 0.0)
 
     def test_invalid_inputs(self):
         field = fields.Float()
-        self.assertRaises(ValidationError, field.load, 'abc')
+        self._load_raises(field, 'abc', ['A valid number is required.'])
 
     def test_valid_outputs(self):
         field = fields.Float()
-        self.assertEqual(field.dump('1'), 1.0)
-        self.assertEqual(field.dump('0'), 0.0)
-        self.assertEqual(field.dump(1), 1.0)
-        self.assertEqual(field.dump(0), 0.0)
-        self.assertEqual(field.dump(1), 1.0)
-        self.assertEqual(field.dump(0), 0.0)
+        self._dump_equal(field, '1', 1.0)
+        self._dump_equal(field, '0', 0.0)
+        self._dump_equal(field, 1, 1.0)
+        self._dump_equal(field, 0, 0.0)
+        self._dump_equal(field, 1, 1.0)
+        self._dump_equal(field, 0, 0.0)
 
     def test_invalid_outputs(self):
         field = fields.Float()
-        self.assertRaises(ValueError, field.dump, 'abc')
+        self._dump_raises(field, 'abc', ValueError)
 
 
-class TestMinMaxFloat(TestCase):
+class TestMinMaxFloat(BaseTestCase):
     """
     Valid and invalid values for `Float`.
     """
     def test_valid_inputs(self):
         field = fields.Float(min_value=1, max_value=3)
-        self.assertEqual(field.load(1.0), 1.0)
-        self.assertEqual(field.load(3.0), 3.0)
+        self._load_equal(field, 1.0, 1.0)
+        self._load_equal(field, 3.0, 3.0)
 
     def test_invalid_inputs(self):
         field = fields.Float(min_value=1, max_value=3)
-        self.assertRaises(ValidationError, field.load, 0.9)
-        self.assertRaises(ValidationError, field.load, 3.1)
+        self._load_raises(field, 0.9, ['Ensure this value is greater than or equal to 1.'])
+        self._load_raises(field, 3.1, ['Ensure this value is less than or equal to 3.'])
 
     def test_valid_outputs(self):
         field = fields.Float(min_value=1, max_value=3)
-        self.assertEqual(field.dump(0.0), 0.0)
-        self.assertEqual(field.dump(4.0), 4.0)
+        self._dump_equal(field, 0.0, 0.0)
+        self._dump_equal(field, 4.0, 4.0)
 
 
-class TestFunction(TestCase):
+class TestFunction(BaseTestCase):
     """
     Valid and invalid values for `Function`.
     """
@@ -282,235 +298,265 @@ class TestFunction(TestCase):
             return value
 
         field = fields.Function(dump_func=dump_func)
-        self.assertEqual(field.dump('value'), 'value')
+        self._dump_equal(field, 'value', 'value')
 
     def test_load_func(self):
         def load_func(value):
             return value
 
         field = fields.Function(load_func=load_func)
-        self.assertEqual(field.load('value'), 'value')
+        self._load_equal(field, 'value', 'value')
 
     def test_without_func(self):
         field = fields.Function()
-        self.assertEqual(field.load('value'), missing)
-        self.assertEqual(field.dump('value'), missing)
+        self._load_equal(field, 'value', missing)
+        self._dump_equal(field, 'value', missing)
+
+    def test_func_not_callable(self):
+        self.assertRaises(ValueError, fields.Function, dump_func='dump_func')
+
+    def test_dump_func_passed_is_dump_only(self):
+        def func():
+            pass
+
+        field = fields.Function(dump_func=func)
+        self.assertEqual(field.dump_only, True)
+        self.assertEqual(field.load_only, False)
+
+    def test_load_func_passed_is_load_only(self):
+        def func():
+            pass
+
+        field = fields.Function(load_func=func)
+        self.assertEqual(field.dump_only, False)
+        self.assertEqual(field.load_only, True)
 
 
-class TestInteger(TestCase):
+class TestInteger(BaseTestCase):
     """
     Valid and invalid values for `Integer`.
     """
     def test_valid_inputs(self):
         field = fields.Integer()
-        self.assertEqual(field.load('1'), 1)
-        self.assertEqual(field.load('0'), 0)
-        self.assertEqual(field.load(1), 1)
-        self.assertEqual(field.load(0), 0)
-        self.assertEqual(field.load(1.0), 1)
-        self.assertEqual(field.load(0.0), 0)
+        self._load_equal(field, '1', 1)
+        self._load_equal(field, '0', 0)
+        self._load_equal(field, 1, 1)
+        self._load_equal(field, 0, 0)
+        self._load_equal(field, 1.0, 1)
+        self._load_equal(field, 0.0, 0)
 
     def test_invalid_inputs(self):
         field = fields.Integer()
-        self.assertRaises(ValidationError, field.load, 'abc')
-        self.assertRaises(ValidationError, field.load, '1.0')
+        self._load_raises(field, 'abc', ['A valid integer is required.'])
+        self._load_raises(field, '1.0', ['A valid integer is required.'])
 
     def test_valid_outputs(self):
         field = fields.Integer()
-        self.assertEqual(field.dump(0), 0)
-        self.assertEqual(field.dump(4), 4)
+        self._dump_equal(field, 1, 1)
+        self._dump_equal(field, 1.0, 1)
+        self._dump_equal(field, '1', 1)
 
     def test_invalid_outputs(self):
         field = fields.Integer()
-        self.assertRaises(ValueError, field.dump, 'abc')
+        self._dump_raises(field, 'abc', ValueError)
 
 
-class TestMinMaxInteger(TestCase):
+class TestMinMaxInteger(BaseTestCase):
     def test_valid_inputs(self):
         field = fields.Integer(min_value=1, max_value=3)
-        self.assertEqual(field.load(1), 1)
-        self.assertEqual(field.load(3), 3)
+        self._load_equal(field, 1, 1)
+        self._load_equal(field, 3, 3)
 
     def test_invalid_inputs(self):
         field = fields.Integer(min_value=1, max_value=3)
-        self.assertRaises(ValidationError, field.load, 0)
-        self.assertRaises(ValidationError, field.load, 4)
+        self._load_raises(field, 0, ['Must be at least 1.'])
+        self._load_raises(field, 4, ['Must be at most 3.'])
 
     def test_valid_outputs(self):
         field = fields.Integer(min_value=1, max_value=3)
-        self.assertEqual(field.dump(0), 0)
-        self.assertEqual(field.dump(2), 2)
-        self.assertEqual(field.dump(4), 4)
+        self._dump_equal(field, 0, 0)
+        self._dump_equal(field, 2, 2)
+        self._dump_equal(field, 4, 4)
 
 
-class TestListField(TestCase):
+class TestListField(BaseTestCase):
     """
     Values for `List` with Integer as child.
     """
     def test_valid_inputs(self):
         field = fields.List(fields.Integer())
-        self.assertEqual(field.load([]), [])
-        self.assertEqual(field.load([1, 2, 3]), [1, 2, 3])
-        self.assertEqual(field.load(['1', '2', '3']), [1, 2, 3])
-        self.assertEqual(field.load({1, 2}), [1, 2])
-        self.assertEqual(field.load((1, 2)), [1, 2])
+        self._load_equal(field, [], [])
+        self._load_equal(field, [1, 2, 3], [1, 2, 3])
+        self._load_equal(field, ['1', '2', '3'], [1, 2, 3])
+        self._load_equal(field, {1, 2}, [1, 2])
+        self._load_equal(field, (1, 2), [1, 2])
 
     def test_invalid_inputs(self):
         field = fields.List(fields.Integer())
-        self.assertRaises(ValidationError, field.load, 'not a list')
-        self.assertRaises(ValidationError, field.load, [1, 2, 'error'])
+        self._load_raises(field, 'not a list', ['Not a valid list.'])
+        self._load_raises(field, [1, 2, 'error'], [{2: ['A valid integer is required.']}])
 
     def test_valid_outputs(self):
         field = fields.List(fields.Integer())
-        self.assertEqual(field.dump([]), [])
-        self.assertEqual(field.dump([1, 2, 3]), [1, 2, 3])
-        self.assertEqual(field.dump(['1', '2', '3']), [1, 2, 3])
-        self.assertEqual(field.dump({1, 2, 3}), [1, 2, 3])
-        self.assertEqual(field.dump(('1', '2', '3')), [1, 2, 3])
+        self._dump_equal(field, [], [])
+        self._dump_equal(field, [1, 2, 3], [1, 2, 3])
+        self._dump_equal(field, ['1', '2', '3'], [1, 2, 3])
+        self._dump_equal(field, {1, 2, 3}, [1, 2, 3])
+        self._dump_equal(field, ('1', '2', '3'), [1, 2, 3])
 
     def test_disallow_empty(self):
         field = fields.List(fields.Integer(), allow_empty=False)
-        self.assertRaises(ValidationError, field.load, [])
+        self._load_raises(field, [], ['This list may not be empty.'])
 
 
-class TestMethod(TestCase):
+class TestMethod(BaseTestCase):
     """
     Valid and invalid values for `Method`.
     """
-    def test_dump_func(self):
+    def test_dump_method(self):
         class MyContract(Contract):
-            @staticmethod
-            def dump_method(value):
+            def dump_method(self, value):
                 return value
 
         field = fields.Method(dump_method_name='dump_method')
         field.bind('field', MyContract)
 
-        self.assertEqual(field.dump('value'), 'value')
+        self._dump_equal(field, 'value', 'value')
 
-    def test_load_func(self):
+    def test_load_method(self):
         class MyContract(Contract):
-            @staticmethod
-            def load_method(value):
+            def load_method(self, value):
                 return value
 
         field = fields.Method(load_method_name='load_method')
         field.bind('field', MyContract)
 
-        self.assertEqual(field.load('value'), 'value')
+        self._load_equal(field, 'value', 'value')
 
-    def test_without_methods(self):
+    def test_without_method(self):
         field = fields.Method()
-        self.assertEqual(field.dump('value'), missing)
-        self.assertEqual(field.load('value'), missing)
+        self._dump_equal(field, 'value', missing)
+        self._load_equal(field, 'value', missing)
 
-    def test_not_callable_methods(self):
+    def test_method_not_callable(self):
         class MyContract(Contract):
             dump_method = 'attribute'
 
         field = fields.Method(dump_method_name='dump_method')
         self.assertRaises(ValueError, field.bind, 'field', MyContract)
 
+    def test_method_missing(self):
+        class MyContract(Contract):
+            dump_method = 'attribute'
+
         field = fields.Method(load_method_name='not_found')
-        self.assertRaises(AttributeError, field.bind, 'field', MyContract)
+        self.assertRaises(ValueError, field.bind, 'field', MyContract)
+
+    def test_dump_method_passed_is_dump_only(self):
+        field = fields.Method(dump_method_name='method_name')
+        self.assertEqual(field.dump_only, True)
+        self.assertEqual(field.load_only, False)
+
+    def test_load_method_passed_is_load_only(self):
+        field = fields.Method(load_method_name='method_name')
+        self.assertEqual(field.dump_only, False)
+        self.assertEqual(field.load_only, True)
 
 
-class TestString(TestCase):
+class TestString(BaseTestCase):
     """
     Valid and invalid values for `String`.
     """
     def test_valid_inputs(self):
         field = fields.String()
-        self.assertEqual(field.load(1), '1')
-        self.assertEqual(field.load('abc'), 'abc')
-        self.assertEqual(field.load(' abc '), ' abc ')
+        self._load_equal(field, 1, '1')
+        self._load_equal(field, 'abc', 'abc')
+        self._load_equal(field, ' abc ', ' abc ')
 
     def test_invalid_inputs(self):
         field = fields.String()
-        self.assertRaises(ValidationError, field.load, '')
+        self._load_raises(field, '', ['This field may not be blank.'])
 
     def test_valid_outputs(self):
         field = fields.String()
-        self.assertEqual(field.dump(1), '1')
-        self.assertEqual(field.dump(1.0), '1.0')
-        self.assertEqual(field.dump('abc'), 'abc')
+        self._dump_equal(field, 1, '1')
+        self._dump_equal(field, 1.0, '1.0')
+        self._dump_equal(field, 'abc', 'abc')
 
     def test_trim_whitespace(self):
         field = fields.String(trim_whitespace=True)
-        self.assertEqual(field.load(' abc '), 'abc')
+        self._load_equal(field, ' abc ', 'abc')
 
     def test_trim_whitespace_with_space_value(self):
         field = fields.String(trim_whitespace=True)
-        self.assertRaises(ValidationError, field.load, ' ')
+        self._load_raises(field, ' ', ['This field may not be blank.'])
 
     def test_allow_blank(self):
         field = fields.String(allow_blank=True)
-        self.assertEqual(field.load(''), '')
+        self._load_equal(field, '', '')
 
     def test_allow_none_with_empty_value(self):
         field = fields.String(allow_none=True)
-        self.assertEqual(field.load(''), None)
+        self._load_equal(field, '', None)
 
 
-class TestMinMaxString(TestCase):
+class TestMinMaxString(BaseTestCase):
     """
     Valid and invalid values for `String` with min and max limits.
     """
     def test_valid_inputs(self):
         field = fields.String(min_length=2, max_length=4)
-        self.assertEqual(field.load(12), '12')
-        self.assertEqual(field.load(1.0), '1.0')
-        self.assertEqual(field.load('ab'), 'ab')
-        self.assertEqual(field.load('abcd'), 'abcd')
+        self._load_equal(field, 12, '12')
+        self._load_equal(field, 1.0, '1.0')
+        self._load_equal(field, 'ab', 'ab')
+        self._load_equal(field, 'abcd', 'abcd')
 
     def test_invalid_inputs(self):
         field = fields.String(min_length=2, max_length=4)
-        self.assertRaises(ValidationError, field.load, '1')
-        self.assertRaises(ValidationError, field.load, 1)
-        self.assertRaises(ValidationError, field.load, 'abcde')
-        self.assertRaises(ValidationError, field.load, '12345')
+        self._load_raises(field, '1', ['Shorter than minimum length 2.'])
+        self._load_raises(field, 'abcde', ['Longer than maximum length 4.'])
 
     def test_valid_outputs(self):
         field = fields.String(min_length=1, max_length=3)
-        self.assertEqual(field.dump(''), '')
-        self.assertEqual(field.dump('12345'), '12345')
+        self._dump_equal(field, '', '')
+        self._dump_equal(field, '12345', '12345')
 
 
-class TestUUID(TestCase):
+class TestUUID(BaseTestCase):
     """
     Valid and invalid values for `UUID`.
     """
     def test_valid_inputs(self):
         field = fields.UUID()
-        self.assertEqual(field.load('825d7aeb-05a9-45b5-a5b7-05df87923cda'), uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'))
-        self.assertEqual(field.load('825d7aeb05a945b5a5b705df87923cda'), uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'))
-        self.assertEqual(field.load(uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda')), uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'))
+        self._load_equal(field, '825d7aeb-05a9-45b5-a5b7-05df87923cda', uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'))
+        self._load_equal(field, '825d7aeb05a945b5a5b705df87923cda', uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'))
+        self._load_equal(field, uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'), uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'))
 
     def test_invalid_inputs(self):
         field = fields.UUID()
-        self.assertRaises(ValidationError, field.load, '825d7aeb-05a9-45b5-a5b7')
-        self.assertRaises(ValidationError, field.load, (1, 2, 3))
-        self.assertRaises(ValidationError, field.load, 123)
+        self._load_raises(field, '825d7aeb-05a9-45b5-a5b7', ['"825d7aeb-05a9-45b5-a5b7" is not a valid UUID.'])
+        self._load_raises(field, (1, 2, 3), ['"(1, 2, 3)" is not a valid UUID.'])
+        self._load_raises(field, 123, ['"123" is not a valid UUID.'])
 
     def test_valid_outputs(self):
         field = fields.UUID()
-        self.assertEqual(field.dump(uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda')), '825d7aeb-05a9-45b5-a5b7-05df87923cda')
+        self._dump_equal(field, uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'), '825d7aeb-05a9-45b5-a5b7-05df87923cda')
 
     def test_invalid_outputs(self):
         field = fields.UUID()
-        self.assertRaises(AttributeError, field.dump, '825d7aeb-05a9-45b5-a5b7-05df87923cda')
+        self._dump_raises(field, '825d7aeb-05a9-45b5-a5b7-05df87923cda', AttributeError)
 
     def test_hex_verbose_format(self):
         field = fields.UUID(dump_format='hex_verbose')
-        self.assertEqual(field.dump(uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda')), '825d7aeb-05a9-45b5-a5b7-05df87923cda')
+        self._dump_equal(field, uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'), '825d7aeb-05a9-45b5-a5b7-05df87923cda')
 
     def test_hex_format(self):
         field = fields.UUID(dump_format='hex')
-        self.assertEqual(field.dump(uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda')), '825d7aeb05a945b5a5b705df87923cda')
+        self._dump_equal(field, uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'), '825d7aeb05a945b5a5b705df87923cda')
 
     def test_int_format(self):
         field = fields.UUID(dump_format='int')
-        self.assertEqual(field.dump(uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda')), 173285016134224701509569922458251836634)
+        self._dump_equal(field, uuid.UUID('825d7aeb-05a9-45b5-a5b7-05df87923cda'), 173285016134224701509569922458251836634)
 
     def test_invalid_format(self):
         self.assertRaises(ValueError, fields.UUID, dump_format='invalid')

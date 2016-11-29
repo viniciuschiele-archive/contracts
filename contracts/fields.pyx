@@ -8,14 +8,14 @@ import uuid
 
 from cpython.datetime cimport datetime, date
 from . import timezone
-from . cimport abc
 from . cimport timezone
 from . cimport validators
 from .exceptions cimport ValidationError
 from .utils cimport missing
+from .contract cimport BaseContract, Context
 
 
-cdef class Field(abc.Field):
+cdef class Field(object):
     default_error_messages = {
         'null': 'This field may not be null.',
         'required': 'This field is required.',
@@ -49,8 +49,8 @@ cdef class Field(abc.Field):
         self._prepare_error_messages(error_messages)
 
     cpdef bind(self, str name, object parent):
-        if not issubclass(parent, abc.Contract):
-            raise TypeError('Expected abc.Contract, got ' + str(parent))
+        if not issubclass(parent, BaseContract):
+            raise TypeError('Expected BaseContract, got ' + str(parent))
 
         self.name = name
         self.parent = parent
@@ -61,20 +61,16 @@ cdef class Field(abc.Field):
         if not self.load_from:
             self.load_from = name
 
-        validator = getattr(parent, '_validate_' + name, None)
-        if validator:
-            self.validators.append(validator)
-
-    cpdef object dump(self, object value):
+    cpdef object dump(self, object value, Context context):
         if value is missing:
             return missing
 
         if value is None:
             return None
 
-        return self._dump(value)
+        return self._dump(value, context)
 
-    cpdef object load(self, object value):
+    cpdef object load(self, object value, Context context):
         if value is None:
             if self.allow_none:
                 return None
@@ -87,7 +83,7 @@ cdef class Field(abc.Field):
 
             return self._get_default()
 
-        validated_value = self._load(value)
+        validated_value = self._load(value, context)
         self._validate(validated_value)
         return validated_value
 
@@ -111,10 +107,10 @@ cdef class Field(abc.Field):
 
         return self.default_value
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         return value
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         return value
 
     def _fail(self, key, **kwargs):
@@ -139,9 +135,9 @@ cdef class Field(abc.Field):
                     self._fail('validator_failed')
             except ValidationError as e:
                 if errors is None:
-                    errors = [e]
+                    errors = e.messages
                 else:
-                    errors.append(e)
+                    errors.extend(e.messages)
 
         if errors:
             raise ValidationError(errors)
@@ -163,7 +159,7 @@ cdef class Boolean(Field):
         self._true_values = self.default_options.get('true_values')
         self._false_values = self.default_options.get('false_values')
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if isinstance(value, bool):
             return value
 
@@ -178,7 +174,7 @@ cdef class Boolean(Field):
 
         self._fail('invalid', value=value)
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         if isinstance(value, bool):
             return value
 
@@ -196,7 +192,7 @@ cdef class Date(Field):
         'invalid': 'Date has wrong format.'
     }
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if isinstance(value, datetime):
             return value.date()
 
@@ -212,7 +208,7 @@ cdef class Date(Field):
 
         self._fail('invalid')
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         if isinstance(value, datetime):
             return value.date().isoformat()
 
@@ -237,7 +233,7 @@ cdef class DateTime(Field):
         else:
             self.default_timezone = default_timezone
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if isinstance(value, datetime):
             return self._enforce_timezone(value)
 
@@ -254,7 +250,7 @@ cdef class DateTime(Field):
 
         self._fail('invalid')
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         return value.isoformat()
 
     cpdef _enforce_timezone(self, datetime value):
@@ -282,7 +278,7 @@ cdef class Float(Field):
         if self.min_value is not None or self.max_value is not None:
             self.validators.append(validators.Range(min_value, max_value, self.error_messages))
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if isinstance(value, float):
             return value
 
@@ -291,7 +287,7 @@ cdef class Float(Field):
         except (TypeError, ValueError):
             self._fail('invalid')
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         if isinstance(value, float):
             return value
 
@@ -300,19 +296,28 @@ cdef class Float(Field):
 
 cdef class Function(Field):
     def __init__(self, object dump_func=None, object load_func=None, **kwargs):
+        kwargs['dump_only'] = bool(dump_func) and not bool(load_func)
+        kwargs['load_only'] = bool(load_func) and not bool(dump_func)
+
         super(Function, self).__init__(**kwargs)
+
+        if dump_func and not callable(dump_func):
+            raise ValueError('Expected a callable object, got ' + str(dump_func))
+
+        if load_func and not callable(load_func):
+            raise ValueError('Expected a callable object, got ' + str(load_func))
 
         self.dump_func = dump_func
         self.load_func = load_func
 
-    cpdef object _dump(self, object value):
-        if not self.dump_func:
+    cpdef object _dump(self, object value, Context context):
+        if self.dump_func is None:
             return missing
 
         return self.dump_func(value)
 
-    cpdef object _load(self, object value):
-        if not self.load_func:
+    cpdef object _load(self, object value, Context context):
+        if self.load_func is None:
             return missing
 
         return self.load_func(value)
@@ -333,7 +338,7 @@ cdef class Integer(Field):
         if self.min_value is not None or self.max_value is not None:
             self.validators.append(validators.Range(min_value, max_value, self.error_messages))
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if isinstance(value, int):
             return value
 
@@ -342,7 +347,7 @@ cdef class Integer(Field):
         except (ValueError, TypeError):
             self._fail('invalid')
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         if isinstance(value, int):
             return value
 
@@ -355,13 +360,13 @@ cdef class List(Field):
         'empty': 'This list may not be empty.'
     }
 
-    def __init__(self, abc.Field child, bint allow_empty=True, *args, **kwargs):
+    def __init__(self, Field child, bint allow_empty=True, *args, **kwargs):
         super(List, self).__init__(*args, **kwargs)
 
         self.child = child
         self.allow_empty = allow_empty
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         """
         List of dicts of native values <- List of dicts of primitive datatypes.
         """
@@ -376,27 +381,30 @@ cdef class List(Field):
 
         for idx, item in enumerate(value):
             try:
-                result.append(self.child.load(item))
+                result.append(self.child.load(item, context))
             except ValidationError as e:
                 if errors is None:
-                    errors = {idx: e}
+                    errors = {idx: e.messages}
                 else:
-                    errors.update({idx: e})
+                    errors.update({idx: e.messages})
 
         if errors:
             raise ValidationError(errors)
 
         return result
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         """
         List of object instances -> List of dicts of primitive datatypes.
         """
-        return [self.child.dump(item) for item in value]
+        return [self.child.dump(item, context) for item in value]
 
 
 cdef class Method(Field):
     def __init__(self, str dump_method_name=None, str load_method_name=None, **kwargs):
+        kwargs['dump_only'] = bool(dump_method_name) and not bool(load_method_name)
+        kwargs['load_only'] = bool(load_method_name) and not bool(dump_method_name)
+
         super(Method, self).__init__(**kwargs)
 
         self.dump_method_name = dump_method_name
@@ -414,25 +422,28 @@ cdef class Method(Field):
         if self.load_method_name:
             self._load_method = self._get_method(self.load_method_name)
 
-    cpdef _get_method(self, str method_name):
-        method = getattr(self.parent, method_name)
+    cpdef object _get_method(self, str method_name):
+        method = getattr(self.parent, method_name, None)
+
+        if not method:
+            raise ValueError('Method %s not found in the object %s' % (method_name, str(self.parent)))
 
         if not callable(method):
             raise ValueError('Object {0!r} is not callable.'.format(method))
 
         return method
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         if not self._dump_method:
             return missing
 
-        return self._dump_method(value)
+        return self._dump_method(context.contract, value)
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if not self._load_method:
             return missing
 
-        return self._load_method(value)
+        return self._load_method(context.contract, value)
 
 
 cdef class Nested(Field):
@@ -445,16 +456,16 @@ cdef class Nested(Field):
 
         self._instance = None
 
-    cdef inline abc.Contract _get_instance(self):
+    cdef inline BaseContract _get_instance(self):
         if not self._instance:
             self._instance = self.nested(many=self.many, only=self.only, exclude=self.exclude)
         return self._instance
 
-    cpdef object _load(self, object value):
-        return self._get_instance().load(value)
+    cpdef object _load(self, object value, Context context):
+        return self._get_instance().load(value, context)
 
-    cpdef object _dump(self, object value):
-        return self._get_instance().dump(value)
+    cpdef object _dump(self, object value, Context context):
+        return self._get_instance().dump(value, context)
 
 
 cdef class String(Field):
@@ -489,21 +500,25 @@ cdef class String(Field):
             self.validators.append(
                 validators.Length(self.min_length, self.max_length, error_messages=self.error_messages))
 
-    cpdef object _load(self, object value):
-        if not isinstance(value, str):
-            value = str(value)
+    cpdef object _load(self, object value, Context context):
+        cdef str s
+
+        if isinstance(value, str):
+            s = <str>value
+        else:
+            s = str(value)
 
         if self.trim_whitespace:
-            value = value.strip()
+            s = s.strip()
 
-        if not self.allow_blank and value == '':
+        if not self.allow_blank and s == '':
             if self.allow_none:
                 return None
             self._fail('blank')
 
-        return value
+        return s
 
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         if isinstance(value, str):
             return value
         return str(value)
@@ -534,7 +549,7 @@ cdef class UUID(Field):
 
         self.dump_format = dump_format
 
-    cpdef object _load(self, object value):
+    cpdef object _load(self, object value, Context context):
         if isinstance(value, uuid.UUID):
             return value
 
@@ -544,7 +559,7 @@ cdef class UUID(Field):
             self._fail('invalid', value=value)
 
     @cython.boundscheck(False)
-    cpdef object _dump(self, object value):
+    cpdef object _dump(self, object value, Context context):
         cdef str hex
         cdef str dump_format = self.dump_format
 

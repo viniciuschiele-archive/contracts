@@ -1,8 +1,9 @@
-from . cimport abc
 from cpython.datetime cimport datetime
 
+from .contract cimport Context, BaseContract
 
-cdef class Field(abc.Field):
+
+cdef class Field(object):
     cdef public str name
     cdef public object parent
     cdef public bint dump_only
@@ -15,10 +16,14 @@ cdef class Field(abc.Field):
     cdef public list validators
     cdef public dict error_messages
 
+    cpdef bind(self, str name, object parent)
+    cpdef object dump(self, object value, Context context)
+    cpdef object load(self, object value, Context context)
+
     cdef _prepare_error_messages(self, dict error_messages)
     cpdef object _get_default(self)
-    cpdef object _dump(self, object value)
-    cpdef object _load(self, object value)
+    cpdef object _dump(self, object value, Context context)
+    cpdef object _load(self, object value, Context context)
     cpdef _validate(self, object value)
 
 
@@ -53,7 +58,7 @@ cdef class Integer(Field):
 
 
 cdef class List(Field):
-    cdef public abc.Field child
+    cdef public Field child
     cdef public bint allow_empty
 
 
@@ -63,7 +68,7 @@ cdef class Method(Field):
     cdef public object _dump_method
     cdef public object _load_method
 
-    cpdef _get_method(self, str method_name)
+    cpdef object _get_method(self, str method_name)
 
 
 cdef class Nested(Field):
@@ -71,9 +76,9 @@ cdef class Nested(Field):
     cdef public bint many
     cdef public set only
     cdef public set exclude
-    cdef public abc.Contract _instance
+    cdef public BaseContract _instance
 
-    cdef inline abc.Contract _get_instance(self)
+    cdef inline BaseContract _get_instance(self)
 
 
 cdef class String(Field):

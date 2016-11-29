@@ -1,1 +1,1 @@
-from .contract import Contract
+from .contract import Contract, Context
