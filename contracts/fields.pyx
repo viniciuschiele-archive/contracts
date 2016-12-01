@@ -8,8 +8,7 @@ import uuid
 
 from cpython.datetime cimport datetime, date
 from . import timezone
-from . cimport timezone
-from . cimport validators
+from . cimport timezone, validators
 from .exceptions cimport ValidationError
 from .utils cimport missing
 from .contract cimport BaseContract, Context
@@ -50,8 +49,11 @@ cdef class Field(object):
         self._prepare_error_messages(error_messages)
 
     cpdef bind(self, str name, object parent):
-        if not issubclass(parent, BaseContract):
-            raise TypeError('Expected BaseContract, got ' + str(parent))
+        if name is None or len(name) == 0:
+            raise ValueError('name cannot be empty or None')
+
+        if not isinstance(parent, type) or not issubclass(parent, BaseContract):
+            raise ValueError('parent must be a BaseContract class')
 
         self.name = name
         self.parent = parent
@@ -73,6 +75,9 @@ cdef class Field(object):
         return field
 
     cpdef object dump(self, object value, Context context):
+        if context is None:
+            raise ValueError('context cannot be None')
+
         if value is missing:
             return missing
 
@@ -82,6 +87,9 @@ cdef class Field(object):
         return self._dump(value, context)
 
     cpdef object load(self, object value, Context context):
+        if context is None:
+            raise ValueError('context cannot be None')
+
         if value is None:
             if self.allow_none:
                 return None
@@ -377,13 +385,13 @@ cdef class Function(Field):
         if self.dump_func is None:
             return missing
 
-        return self.dump_func(value)
+        return self.dump_func(value, context)
 
     cpdef object _load(self, object value, Context context):
         if self.load_func is None:
             return missing
 
-        return self.load_func(value)
+        return self.load_func(value, context)
 
 
 cdef class Integer(Field):
@@ -520,13 +528,13 @@ cdef class Method(Field):
         if not self._dump_method:
             return missing
 
-        return self._dump_method(context.contract, value)
+        return self._dump_method(context.contract, value, context)
 
     cpdef object _load(self, object value, Context context):
         if not self._load_method:
             return missing
 
-        return self._load_method(context.contract, value)
+        return self._load_method(context.contract, value, context)
 
 
 cdef class Nested(Field):
@@ -558,7 +566,6 @@ cdef class Nested(Field):
 
     cpdef object _dump(self, object value, Context context):
         return self._get_instance().dump(value, context)
-
 
 
 cdef class String(Field):
