@@ -19,7 +19,7 @@ cdef class BaseContract(object):
     cpdef object load(self, object value, Context context=*)
 
     cpdef _prepare_fields(self)
-    cpdef _prepare_nested_fields(self, str option_name, set field_names)
+    cpdef _prepare_nested_fields(self, int option_index, set field_names, dict result)
 
     cpdef object _pre_dump(self, object data, Context context)
     cpdef object _pre_dump_many(self, object data, Context context)

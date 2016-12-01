@@ -18,10 +18,12 @@ cdef class Field(object):
     cdef public list _method_validators
 
     cpdef bind(self, str name, object parent)
+    cpdef Field copy(self)
     cpdef object dump(self, object value, Context context)
     cpdef object load(self, object value, Context context)
     cpdef object validator(self, func)
 
+    cpdef _copy_to(self, Field obj)
     cdef _prepare_error_messages(self, dict error_messages)
     cpdef object _get_default(self)
     cpdef object _dump(self, object value, Context context)

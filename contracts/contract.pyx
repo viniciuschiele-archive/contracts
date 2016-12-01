@@ -107,19 +107,37 @@ cdef class BaseContract(object):
         return data
 
     cpdef _prepare_fields(self):
+        cdef dict nested_fields = dict()
+        cdef set field_names
+
         if self.only:
-            self._prepare_nested_fields('only', self.only)
+            self._prepare_nested_fields(0, self.only, nested_fields)
             self.only = set([field_name.split('.', 1)[0] for field_name in self.only])
             field_names = self.only
         else:
-            field_names = set(self._declared_fields)
+            field_names = set(self.fields)
 
         if self.exclude:
-            self._prepare_nested_fields('exclude', self.exclude)
+            self._prepare_nested_fields(1, self.exclude, nested_fields)
             self.exclude = set([field_name for field_name in self.exclude if '.' not in field_name])
             field_names -= set(self.exclude)
 
-        for field_name, field in self._declared_fields.items():
+        cdef Field nested
+
+        for nested_name, nested_options in nested_fields.items():
+            nested = self.fields[nested_name].copy()
+
+            nested_only, nested_exclude = nested_options
+
+            if len(nested_only) > 0:
+                nested.only = set(nested_only)
+
+            if len(nested_exclude) > 0:
+                nested.exclude = set(nested_exclude)
+
+            self.fields[nested_name] = nested
+
+        for field_name, field in self.fields.items():
             if field.name in field_names:
                 if field.load_only:
                     self._load_fields.append(field)
@@ -129,15 +147,15 @@ cdef class BaseContract(object):
                     self._dump_fields.append(field)
                     self._load_fields.append(field)
 
-    cpdef _prepare_nested_fields(self, str option_name, set field_names):
+    cpdef _prepare_nested_fields(self, int option_index, set field_names, dict result):
         nested_fields = [name.split('.', 1) for name in field_names if '.' in name]
 
-        nested_options = defaultdict(list)
         for parent, nested_names in nested_fields:
-            nested_options[parent].append(nested_names)
+            options = result.get(parent)
+            if options is None:
+                result[parent] = options = list([list(), list()])
 
-        for key, options in iter(nested_options.items()):
-            setattr(self._declared_fields[key], option_name, set(options))
+            options[option_index].append(nested_names)
 
     cdef inline object _get_value(self, object data, str field_name):
         cdef dict d

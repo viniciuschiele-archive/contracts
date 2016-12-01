@@ -62,6 +62,16 @@ cdef class Field(object):
         if not self.load_from:
             self.load_from = name
 
+    cpdef Field copy(self):
+        """
+        Return a shallow copy of itself.
+        """
+        cdef Field field = type(self).__new__(type(self))
+
+        self._copy_to(field)
+
+        return field
+
     cpdef object dump(self, object value, Context context):
         if value is missing:
             return missing
@@ -91,6 +101,21 @@ cdef class Field(object):
     cpdef object validator(self, func):
         self._method_validators.append(func)
         return func
+
+    cpdef _copy_to(self, Field field):
+        field.dump_only = self.dump_only
+        field.load_only = self.load_only
+        field.default_value = self.default_value
+        field.allow_none = self.allow_none
+        field.dump_to = self.dump_to
+        field.load_from = self.load_from
+        field.validators = self.validators
+        field.required = self.required
+        field.allow_none = self.allow_none
+        field.name = self.name
+        field.parent = self.parent
+        field.error_messages = self.error_messages
+        field._method_validators = self._method_validators
 
     cdef _prepare_error_messages(self, dict error_messages):
         cdef dict messages = {}
@@ -174,6 +199,12 @@ cdef class Boolean(Field):
         self._true_values = self.default_options.get('true_values')
         self._false_values = self.default_options.get('false_values')
 
+    cpdef _copy_to(self, Field field):
+        super(Boolean, self)._copy_to(field)
+
+        field._true_values = self._true_values
+        field._false_values = self._false_values
+
     cpdef object _load(self, object value, Context context):
         if isinstance(value, bool):
             return value
@@ -248,6 +279,11 @@ cdef class DateTime(Field):
         else:
             self.default_timezone = default_timezone
 
+    cpdef _copy_to(self, Field field):
+        super(DateTime, self)._copy_to(field)
+
+        field.default_timezone = self.default_timezone
+
     cpdef object _load(self, object value, Context context):
         if isinstance(value, datetime):
             return self._enforce_timezone(value)
@@ -293,6 +329,12 @@ cdef class Float(Field):
         if self.min_value is not None or self.max_value is not None:
             self.validators.append(validators.Range(min_value, max_value, self.error_messages))
 
+    cpdef _copy_to(self, Field field):
+        super(Float, self)._copy_to(field)
+
+        field.min_value = self.min_value
+        field.max_value = self.max_value
+
     cpdef object _load(self, object value, Context context):
         if isinstance(value, float):
             return value
@@ -325,6 +367,12 @@ cdef class Function(Field):
         self.dump_func = dump_func
         self.load_func = load_func
 
+    cpdef _copy_to(self, Field field):
+        super(Function, self)._copy_to(field)
+
+        field.dump_func = self.dump_func
+        field.load_func = self.load_func
+
     cpdef object _dump(self, object value, Context context):
         if self.dump_func is None:
             return missing
@@ -353,6 +401,12 @@ cdef class Integer(Field):
         if self.min_value is not None or self.max_value is not None:
             self.validators.append(validators.Range(min_value, max_value, self.error_messages))
 
+    cpdef _copy_to(self, Field field):
+        super(Integer, self)._copy_to(field)
+
+        field.min_value = self.dump_func
+        field.max_value = self.load_func
+
     cpdef object _load(self, object value, Context context):
         if isinstance(value, int):
             return value
@@ -380,6 +434,12 @@ cdef class List(Field):
 
         self.child = child
         self.allow_empty = allow_empty
+
+    cpdef _copy_to(self, Field field):
+        super(Integer, self)._copy_to(field)
+
+        field.child = self.child
+        field.allow_empty = self.allow_empty
 
     cpdef object _load(self, object value, Context context):
         """
@@ -437,6 +497,14 @@ cdef class Method(Field):
         if self.load_method_name:
             self._load_method = self._get_method(self.load_method_name)
 
+    cpdef _copy_to(self, Field field):
+        super(Method, self)._copy_to(field)
+
+        field.dump_method_name = self.dump_method_name
+        field.load_method_name = self.load_method_name
+        field._dump_method = self._dump_method
+        field._load_method = self._load_method
+
     cpdef object _get_method(self, str method_name):
         method = getattr(self.parent, method_name, None)
 
@@ -476,11 +544,21 @@ cdef class Nested(Field):
             self._instance = self.nested(many=self.many, only=self.only, exclude=self.exclude)
         return self._instance
 
+    cpdef _copy_to(self, Field field):
+        super(Nested, self)._copy_to(field)
+
+        # self._instance cannot by copied
+        field.nested = self.nested
+        field.many = self.many
+        field.only = self.only
+        field.exclude = self.exclude
+
     cpdef object _load(self, object value, Context context):
         return self._get_instance().load(value, context)
 
     cpdef object _dump(self, object value, Context context):
         return self._get_instance().dump(value, context)
+
 
 
 cdef class String(Field):
@@ -514,6 +592,14 @@ cdef class String(Field):
         if self.min_length is not None or self.max_length is not None:
             self.validators.append(
                 validators.Length(self.min_length, self.max_length, error_messages=self.error_messages))
+
+    cpdef _copy_to(self, Field field):
+        super(String, self)._copy_to(field)
+
+        field.allow_blank = self.allow_blank
+        field.trim_whitespace = self.trim_whitespace
+        field.min_length = self.min_length
+        field.max_length = self.max_length
 
     cpdef object _load(self, object value, Context context):
         cdef str s
@@ -563,6 +649,11 @@ cdef class UUID(Field):
             )
 
         self.dump_format = dump_format
+
+    cpdef _copy_to(self, Field field):
+        super(UUID, self)._copy_to(field)
+
+        field.dump_format = self.dump_format
 
     cpdef object _load(self, object value, Context context):
         if isinstance(value, uuid.UUID):
