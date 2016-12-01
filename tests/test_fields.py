@@ -1,6 +1,6 @@
 import uuid
 
-from contracts import Contract, fields, timezone
+from contracts import Contract, Context, fields, timezone
 from contracts.exceptions import ValidationError
 from contracts.utils import missing
 from datetime import datetime, date
@@ -9,18 +9,24 @@ from unittest import TestCase
 
 class BaseTestCase(TestCase):
     def _dump_equal(self, field, input_value, expected_value):
-        self.assertEqual(expected_value, field.dump(input_value, None))
+        self.assertEqual(expected_value, field.dump(input_value, Context()))
 
-    def _dump_raises(self, field, input_value, expected_exception):
-        self.assertRaises(expected_exception, field.dump, input_value, None)
+    def _dump_raises(self, field, input_value, expected_failure):
+        with self.assertRaises(Exception) as exc_info:
+            field.dump(input_value, Context())
+        self.assertEqual(expected_failure, str(exc_info.exception))
 
     def _load_equal(self, field, input_value, expected_value):
-        self.assertEqual(expected_value, field.load(input_value, None))
+        self.assertEqual(expected_value, field.load(input_value, Context()))
 
     def _load_raises(self, field, input_value, expected_failure):
-        with self.assertRaises(ValidationError) as exc_info:
-            field.load(input_value, None)
-        self.assertEqual(expected_failure, exc_info.exception.messages)
+        with self.assertRaises(Exception) as exc_info:
+            field.load(input_value, Context())
+
+        if isinstance(exc_info.exception, ValidationError):
+            self.assertEqual(expected_failure, exc_info.exception.messages)
+        else:
+            self.assertEqual(expected_failure, str(exc_info.exception))
 
 
 class TestField(BaseTestCase):
@@ -66,7 +72,26 @@ class TestField(BaseTestCase):
 
         self.assertEqual(field.dump_to, 'field1')
         self.assertEqual(field.load_from, 'field1')
+        self.assertEqual(field.name, 'field1')
         self.assertEqual(field.parent, Parent)
+
+    def test_bind_with_invalid_name(self):
+        class Parent(Contract):
+            pass
+
+        field = fields.Field()
+        self.assertRaises(ValueError, field.bind, None, Parent)
+        self.assertRaises(ValueError, field.bind, '', Parent)
+
+    def test_bind_with_invalid_parent(self):
+        class InvalidContract:
+            pass
+
+        field = fields.Field()
+        self.assertRaises(ValueError, field.bind, 'field1', None)
+        self.assertRaises(ValueError, field.bind, 'field1', '')
+        self.assertRaises(ValueError, field.bind, 'field1', 1)
+        self.assertRaises(ValueError, field.bind, 'field1', InvalidContract)
 
     def test_validator(self):
         def validator(value):
@@ -155,8 +180,8 @@ class TestBoolean(BaseTestCase):
 
     def test_invalid_outputs(self):
         field = fields.Boolean()
-        self._dump_raises(field, [], TypeError)
-        self._dump_raises(field, {}, TypeError)
+        self._dump_raises(field, [], "unhashable type: 'list'")
+        self._dump_raises(field, {}, "unhashable type: 'dict'")
 
 
 class TestDate(BaseTestCase):
@@ -187,8 +212,9 @@ class TestDate(BaseTestCase):
 
     def test_invalid_outputs(self):
         field = fields.Date()
-        self._dump_raises(field, '2001-01-20', AttributeError)
-        self._dump_raises(field, 'abc', AttributeError)
+        self._dump_raises(field, '2001-01-20', "'str' object has no attribute 'isoformat'")
+        self._dump_raises(field, 'abc',  "'str' object has no attribute 'isoformat'")
+        self._dump_raises(field, 1, "'int' object has no attribute 'isoformat'")
 
 
 class TestDateTime(BaseTestCase):
@@ -234,8 +260,8 @@ class TestDateTime(BaseTestCase):
 
     def test_invalid_outputs(self):
         field = fields.DateTime()
-        self._dump_raises(field, '2001-01-01T13:00:00', AttributeError)
-        self._dump_raises(field, 123, AttributeError)
+        self._dump_raises(field, '2001-01-01T13:00:00', "'str' object has no attribute 'isoformat'")
+        self._dump_raises(field, 123, "'int' object has no attribute 'isoformat'")
 
 
 class TestFloat(BaseTestCase):
@@ -266,7 +292,8 @@ class TestFloat(BaseTestCase):
 
     def test_invalid_outputs(self):
         field = fields.Float()
-        self._dump_raises(field, 'abc', ValueError)
+        self._dump_raises(field, 'abc', "could not convert string to float: 'abc'")
+        self._dump_raises(field, [], "float() argument must be a string or a number, not 'list'")
 
 
 class TestMinMaxFloat(BaseTestCase):
@@ -294,14 +321,14 @@ class TestFunction(BaseTestCase):
     Valid and invalid values for `Function`.
     """
     def test_dump_func(self):
-        def dump_func(value):
+        def dump_func(value, context):
             return value
 
         field = fields.Function(dump_func=dump_func)
         self._dump_equal(field, 'value', 'value')
 
     def test_load_func(self):
-        def load_func(value):
+        def load_func(value, context):
             return value
 
         field = fields.Function(load_func=load_func)
@@ -315,8 +342,16 @@ class TestFunction(BaseTestCase):
     def test_func_not_callable(self):
         self.assertRaises(ValueError, fields.Function, dump_func='dump_func')
 
+    def test_func_with_wrong_parameters(self):
+        def func(value):
+            pass
+
+        field = fields.Function(dump_func=func, load_func=func)
+        self._dump_raises(field, 'value', 'func() takes 1 positional argument but 2 were given')
+        self._load_raises(field, 'value', 'func() takes 1 positional argument but 2 were given')
+
     def test_dump_func_passed_is_dump_only(self):
-        def func():
+        def func(value, context):
             pass
 
         field = fields.Function(dump_func=func)
@@ -324,7 +359,7 @@ class TestFunction(BaseTestCase):
         self.assertEqual(field.load_only, False)
 
     def test_load_func_passed_is_load_only(self):
-        def func():
+        def func(value, context):
             pass
 
         field = fields.Function(load_func=func)
@@ -358,7 +393,8 @@ class TestInteger(BaseTestCase):
 
     def test_invalid_outputs(self):
         field = fields.Integer()
-        self._dump_raises(field, 'abc', ValueError)
+        self._dump_raises(field, 'abc', "invalid literal for int() with base 10: 'abc'")
+        self._dump_raises(field, [], "int() argument must be a string, a bytes-like object or a number, not 'list'")
 
 
 class TestMinMaxInteger(BaseTestCase):
@@ -415,7 +451,7 @@ class TestMethod(BaseTestCase):
     """
     def test_dump_method(self):
         class MyContract(Contract):
-            def dump_method(self, value):
+            def dump_method(self, value, context):
                 return value
 
         field = fields.Method(dump_method_name='dump_method')
@@ -425,7 +461,7 @@ class TestMethod(BaseTestCase):
 
     def test_load_method(self):
         class MyContract(Contract):
-            def load_method(self, value):
+            def load_method(self, value, context):
                 return value
 
         field = fields.Method(load_method_name='load_method')
@@ -544,7 +580,8 @@ class TestUUID(BaseTestCase):
 
     def test_invalid_outputs(self):
         field = fields.UUID()
-        self._dump_raises(field, '825d7aeb-05a9-45b5-a5b7-05df87923cda', AttributeError)
+        self._dump_raises(field, '825d7aeb-05a9-45b5-a5b7-05df87923cda',  "'str' object has no attribute 'int'")
+        self._dump_raises(field, [], "'list' object has no attribute 'int'")
 
     def test_hex_verbose_format(self):
         field = fields.UUID(dump_format='hex_verbose')
