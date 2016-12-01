@@ -3,7 +3,7 @@ import string
 
 from uuid import uuid4
 from contracts.utils import missing
-from contracts import Contract, fields
+from contracts import Contract, Context, fields
 from datetime import datetime
 from marshmallow import fields as mmfields, Schema, post_load, post_dump
 from pytz import timezone
@@ -29,10 +29,10 @@ class MyContract(Contract):
     property8 = fields.Float()
     property9 = fields.Nested(NestedContract)
 
-    # def _post_load(self, data, original_data):
-    #     return MyData(**data)
+    # def _post_load(self, data, context):
+    #     return data
     #
-    # def _post_dump(self, data, original_data, context):
+    # def _post_dump(self, data, context):
     #     return data
 
 
@@ -93,12 +93,6 @@ data = dict(
     property9=dict(property1='123', property2='456')
 )
 
-# contract = MyContract(exclude={'property9.property1'})
-# print(contract.dump(data))
-#
-# contract2 = MyContract()
-# print(contract.dump(data) == contract2.dump(data))
-
 
 def perf(func1, func2, count):
     start = datetime.now()
@@ -115,6 +109,18 @@ def perf(func1, func2, count):
 
     print(elapsed2.total_seconds() / elapsed1.total_seconds())
 
+
+print('init and dump')
+def contract_init_and_dump():
+    contract = MyContract()
+    contract.dump(data)
+
+
+def schema_init_and_dump():
+    schema = MySchema()
+    schema.dump(data)
+
+perf(contract_init_and_dump, schema_init_and_dump, 1000)
 
 print('init')
 perf(lambda: MyContract(), lambda: MySchema(), 1000)

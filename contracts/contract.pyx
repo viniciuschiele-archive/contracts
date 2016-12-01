@@ -107,35 +107,42 @@ cdef class BaseContract(object):
         return data
 
     cpdef _prepare_fields(self):
-        cdef dict nested_fields = dict()
+        cdef dict nested_fields = None
         cdef set field_names
 
         if self.only:
+            if nested_fields is None:
+                nested_fields = dict()
+
             self._prepare_nested_fields(0, self.only, nested_fields)
-            self.only = set([field_name.split('.', 1)[0] for field_name in self.only])
-            field_names = self.only
+            self.only = {field_name.split('.', 1)[0] for field_name in self.only}
+            field_names = set(self.only)
         else:
             field_names = set(self.fields)
 
         if self.exclude:
+            if nested_fields is None:
+                nested_fields = dict()
+
             self._prepare_nested_fields(1, self.exclude, nested_fields)
-            self.exclude = set([field_name for field_name in self.exclude if '.' not in field_name])
-            field_names -= set(self.exclude)
+            self.exclude = {field_name for field_name in self.exclude if '.' not in field_name}
+            field_names -= self.exclude
 
         cdef Field nested
 
-        for nested_name, nested_options in nested_fields.items():
-            nested = self.fields[nested_name].copy()
+        if nested_fields is not None:
+            for nested_name, nested_options in nested_fields.items():
+                nested = self.fields[nested_name].copy()
 
-            nested_only, nested_exclude = nested_options
+                nested_only, nested_exclude = nested_options
 
-            if len(nested_only) > 0:
-                nested.only = set(nested_only)
+                if len(nested_only) > 0:
+                    nested.only = set(nested_only)
 
-            if len(nested_exclude) > 0:
-                nested.exclude = set(nested_exclude)
+                if len(nested_exclude) > 0:
+                    nested.exclude = set(nested_exclude)
 
-            self.fields[nested_name] = nested
+                self.fields[nested_name] = nested
 
         for field_name, field in self.fields.items():
             if field.name in field_names:
