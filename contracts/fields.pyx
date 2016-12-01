@@ -14,6 +14,18 @@ from .utils cimport missing
 from .contract cimport BaseContract, Context
 
 
+# Default values for Boolean field
+BOOLEAN_TRUE_VALUES = {'t', 'T', 'true', 'True', 'TRUE', '1', 1, True}
+BOOLEAN_FALSE_VALUES = {'f', 'F', 'false', 'False', 'FALSE', '0', 0, 0.0, False}
+
+# Default values for DateTime field
+DATETIME_DEFAULT_TIMEZONE = None
+
+# Default values for String field
+STRING_ALLOW_BLANK = False
+STRING_TRIM_WHITESPACE = False
+
+
 cdef class Field(object):
     default_error_messages = {
         'null': 'This field may not be null.',
@@ -196,16 +208,11 @@ cdef class Boolean(Field):
         'invalid': '"{value}" is not a valid boolean.'
     }
 
-    default_options = {
-        'true_values': {'t', 'T', 'true', 'True', 'TRUE', '1', 1, True},
-        'false_values': {'f', 'F', 'false', 'False', 'FALSE', '0', 0, 0.0, False}
-    }
-
     def __init__(self, **kwargs):
         super(Boolean, self).__init__(**kwargs)
 
-        self._true_values = self.default_options.get('true_values')
-        self._false_values = self.default_options.get('false_values')
+        self._true_values = BOOLEAN_TRUE_VALUES
+        self._false_values = BOOLEAN_FALSE_VALUES
 
     cpdef _copy_to(self, Field field):
         super(Boolean, self)._copy_to(field)
@@ -275,15 +282,11 @@ cdef class DateTime(Field):
         'date': 'Expected a datetime but got a date.',
     }
 
-    default_options = {
-        'default_timezone': None
-    }
-
     def __init__(self, default_timezone=None, **kwargs):
         super(DateTime, self).__init__(**kwargs)
 
         if default_timezone is None:
-            self.default_timezone = self.default_options.get('default_timezone')
+            self.default_timezone = DATETIME_DEFAULT_TIMEZONE
         else:
             self.default_timezone = default_timezone
 
@@ -575,21 +578,16 @@ cdef class String(Field):
         'min_length': 'Shorter than minimum length {min_length}.'
     }
 
-    default_options = {
-        'allow_blank': False,
-        'trim_whitespace': False
-    }
-
     def __init__(self, allow_blank=None, trim_whitespace=None, min_length=None, max_length=None, **kwargs):
         super(String, self).__init__(**kwargs)
 
         if allow_blank is None:
-            self.allow_blank = self.default_options.get('allow_blank')
+            self.allow_blank = STRING_ALLOW_BLANK
         else:
             self.allow_blank = allow_blank
 
         if trim_whitespace is None:
-            self.trim_whitespace = self.default_options.get('trim_whitespace')
+            self.trim_whitespace = STRING_TRIM_WHITESPACE
         else:
             self.trim_whitespace = trim_whitespace
 
