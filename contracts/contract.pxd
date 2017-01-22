@@ -11,8 +11,6 @@ cdef class BaseContract(object):
     cdef public bint partial
     cdef public dict fields
 
-    cdef list _load_fields
-    cdef list _dump_fields
     cdef int[:] _hooks
 
     cpdef object dump(self, object value, Context context=*)
@@ -31,7 +29,7 @@ cdef class BaseContract(object):
     cpdef object _post_load(self, object data, Context context)
     cpdef object _post_load_many(self, object data, Context context)
 
-    cdef inline object _get_value(self, object data, str field_name)
+    cdef object _get_value(self, object data, str field_name)
     cdef inline object _dump_many(self, object data, Context context)
     cdef inline object _dump_single(self, object data, Context context)
     cdef inline object _load_many(self, object data, Context context)

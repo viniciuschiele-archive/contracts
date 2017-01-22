@@ -1,7 +1,6 @@
 cimport cython
 
 from cpython cimport array
-from collections import defaultdict
 from .exceptions cimport ContractError, ValidationError
 from .fields cimport Field
 from .utils cimport missing
@@ -39,7 +38,7 @@ cdef class Context(object):
 
     def __setitem__(self, key, value):
         if self._data is None:
-            self._data = dict()
+            self._data = {}
 
         self._data[key] = value
 
@@ -58,9 +57,6 @@ cdef class BaseContract(object):
         self.exclude = exclude
         self.partial = partial
         self.fields = dict(self._declared_fields)
-
-        self._load_fields = []
-        self._dump_fields = []
 
         self._hooks = array.array('i', self._declared_hooks)
 
@@ -112,7 +108,7 @@ cdef class BaseContract(object):
 
         if self.only:
             if nested_fields is None:
-                nested_fields = dict()
+                nested_fields = {}
 
             self._prepare_nested_fields(0, self.only, nested_fields)
             self.only = {field_name.split('.', 1)[0] for field_name in self.only}
@@ -122,7 +118,7 @@ cdef class BaseContract(object):
 
         if self.exclude:
             if nested_fields is None:
-                nested_fields = dict()
+                nested_fields = {}
 
             self._prepare_nested_fields(1, self.exclude, nested_fields)
             self.exclude = {field_name for field_name in self.exclude if '.' not in field_name}
@@ -144,16 +140,6 @@ cdef class BaseContract(object):
 
                 self.fields[nested_name] = nested
 
-        for field_name, field in self.fields.items():
-            if field.name in field_names:
-                if field.load_only:
-                    self._load_fields.append(field)
-                elif field.dump_only:
-                    self._dump_fields.append(field)
-                else:
-                    self._dump_fields.append(field)
-                    self._load_fields.append(field)
-
     cpdef _prepare_nested_fields(self, int option_index, set field_names, dict result):
         nested_fields = [name.split('.', 1) for name in field_names if '.' in name]
 
@@ -164,7 +150,7 @@ cdef class BaseContract(object):
 
             options[option_index].append(nested_names)
 
-    cdef inline object _get_value(self, object data, str field_name):
+    cdef object _get_value(self, object data, str field_name):
         cdef dict d
 
         if isinstance(data, dict):
@@ -194,15 +180,15 @@ cdef class BaseContract(object):
         if self._hooks[PRE_DUMP_INDEX] == 1:
             data = self._pre_dump(data, context)
 
-        cdef dict result = dict()
+        cdef dict result = {}
+        cdef object fields = self.fields.values()
 
         cdef Field field
         cdef object raw, value
 
-        cdef int count = len(self._dump_fields)
-
-        for i in range(count):
-            field = self._dump_fields[i]
+        for field in fields:
+            if field.load_only:
+                continue
 
             raw = self._get_value(data, field.name)
 
@@ -245,15 +231,15 @@ cdef class BaseContract(object):
                 raise ContractError([err])
 
         cdef ContractError errors = None
-        cdef dict result = dict()
-        cdef list load_fields = self._load_fields
-        cdef int count = len(load_fields)
+        cdef dict result = {}
+        cdef object fields = self.fields.values()
 
         cdef Field field
         cdef object raw, value
 
-        for i in range(count):
-            field = load_fields[i]
+        for field in fields:
+            if field.dump_only:
+                continue
 
             try:
                 raw = self._get_value(data, field.load_from)
@@ -326,17 +312,13 @@ class ContractMeta(type):
 
     @classmethod
     def get_declared_fields(mcs, bases, attrs):
-        fields = []
+        fields = {}
 
         for attr_name, attr_value in list(attrs.items()):
             if isinstance(attr_value, Field):
-                fields.append((attr_name, attrs.pop(attr_name)))
+                fields[attr_name] = attrs.pop(attr_name)
 
-        for base in reversed(bases):
-            if hasattr(base, '_declared_fields'):
-                fields = list(base._declared_fields.items()) + fields
-
-        return dict(fields)
+        return fields
 
     @classmethod
     def get_declared_hooks(mcs, bases, attrs):
