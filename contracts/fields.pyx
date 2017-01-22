@@ -11,7 +11,6 @@ from . import timezone
 from . cimport timezone, validators
 from .exceptions cimport ValidationError
 from .utils cimport missing
-from .contract cimport BaseContract, Context
 
 
 # Default values for Boolean field
@@ -415,8 +414,8 @@ cdef class Integer(Field):
     cpdef _copy_to(self, Field field):
         super(Integer, self)._copy_to(field)
 
-        field.min_value = self.dump_func
-        field.max_value = self.load_func
+        field.min_value = self.min_value
+        field.max_value = self.max_value
 
     cpdef object _load(self, object value, Context context):
         if isinstance(value, int):
@@ -447,7 +446,7 @@ cdef class List(Field):
         self.allow_empty = allow_empty
 
     cpdef _copy_to(self, Field field):
-        super(Integer, self)._copy_to(field)
+        super(List, self)._copy_to(field)
 
         field.child = self.child
         field.allow_empty = self.allow_empty
@@ -558,7 +557,7 @@ cdef class Nested(Field):
     cpdef _copy_to(self, Field field):
         super(Nested, self)._copy_to(field)
 
-        # self._instance cannot by copied
+        # self._instance cannot be copied
         field.nested = self.nested
         field.many = self.many
         field.only = self.only

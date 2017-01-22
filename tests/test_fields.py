@@ -394,7 +394,7 @@ class TestInteger(BaseTestCase):
     def test_invalid_outputs(self):
         field = fields.Integer()
         self._dump_raises(field, 'abc', "invalid literal for int() with base 10: 'abc'")
-        self._dump_raises(field, [], "int() argument must be a string, a bytes-like object or a number, not 'list'")
+        self._dump_raises(field, [], "int() argument must be a string or a number, not 'list'")
 
 
 class TestMinMaxInteger(BaseTestCase):
