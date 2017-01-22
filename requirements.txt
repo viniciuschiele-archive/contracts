@@ -1,5 +1,5 @@
 cython
-git+https://github.com/viniciuschiele/ciso8601.git
+ciso8601
 
 marshmallow
 pytz
